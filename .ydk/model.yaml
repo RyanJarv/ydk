@@ -1,0 +1,46 @@
+version: 1
+
+model:
+  nodeTypes:
+    mission:
+      description: The top-level result this project exists to create.
+      root: true
+      required: true
+      maxCount: 1
+
+    outcome:
+      description: A measurable or observable result that supports the mission.
+
+    capability:
+      description: A durable ability the project provides.
+
+    feature:
+      description: A user-facing or maintainer-facing behavior.
+
+    decision:
+      description: A technical or product choice that shapes implementation.
+
+  edgeTypes:
+    supports:
+      description: Source helps achieve target.
+      allowed:
+        - from: outcome
+          to: mission
+        - from: capability
+          to: outcome
+        - from: feature
+          to: capability
+
+    constrains:
+      description: Source limits or shapes target.
+      allowed:
+        - from: decision
+          to: feature
+        - from: decision
+          to: capability
+
+  validation:
+    requireExactlyOneRoot: true
+    requireAllNodesReachRoot: true
+    requireAllAnchorsResolve: true
+    allowCycles: false

@@ -1,0 +1,628 @@
+(cavvy/claude) % codex
+
+╭─────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.122.0)              │
+│                                         │
+│ model:       gpt-5.4   /model to change │
+│ directory:   ~/ydk                      │
+│ permissions: YOLO mode                  │
+╰─────────────────────────────────────────╯
+
+  Tip: Use /status to see the current model, approvals, and token usage.
+
+• Permissions updated to Full Access
+
+
+› Below is a conversation I (RyanJarv) had with (marvin) on an idea I have. I'd like to create an example repository on what this looks like. Brainstorm possible implementation approaches to this in terms of what it means for an example repository representing a project that this tool is used on. Assume the whole repo is the project that is being worked on by this imaginary tool, the tool has to store it's configuration somewhere, how does it do this?
+
+
+  ```
+  # RyanJarv [CRIT] - 11:53 AM
+
+  Curious if anyone has any thoughts on a framework that attempts to anchor all features/design decisions to a central goal or mission statement. So any given feature or module in the code base is logically connected to the goal of the project, making it easy to answer why it exists and ensure focus or purpose doesn't drift over time.
+
+
+  # marvin — 11:56 AM
+
+  like spec driven development on crack?
+  or how would you define an “overall” goal that the project would stick to
+
+
+  # RyanJarv [CRIT],  — 12:09 PM
+
+  > like spec driven development on crack?
+  Yeah now that I think about it,  this idea originally started because I felt the specs that I was writing were too complex. So yeah basically, although a lot simpler, and probably more like a directed graph.
+
+  I'll work on putting together a minimal example in a repo. I think it's a bit hard to explain without an example.
+
+
+  # marvin — 12:12 PM
+
+  It kinda sounds like you want a better version of a claude.md file
+  or is that an incorrect interpretation?
+
+  # RyanJarv [CRIT],  — 12:24 PM
+
+  Yeah I think that makes sense, like a structured version of claude.md along with a model of how this structure is intended to be defined and used.
+
+
+  # RyanJarv [CRIT],  — 12:55 PM
+
+  So having the "structured claude.md" thing in a directed graph is the first part, which is easy enough. The other half is basically:
+
+  > or how would you define an “overall” goal that the project would stick to
+
+  This would be defined by the user, there might be some prompt that helps initialize this but I think this is probably simple enough. The high level goal is purely focused on results, why did you create this project in the first place? What do you hope to solve?
+
+  How you tie that to underlying code is more difficult to define though and probably itself can be configuration and convertable/swappable as needed. I guess the main thing is the inputs and outputs, you point to some line of code and get back a deterministic "this exists because ..."
+  ```
+
+
+• I’ll treat this as repo/product design brainstorming, not implementation. I’ll map the idea into concrete example-repo shapes, especially where the tool’s configuration lives and how code points connect back to purpose.
+
+• A good example repo should make the tool feel like it is being used on a real project, not like the tool itself is the project. I’d make the repo a small app with ordinary code, tests, docs, and a separate “purpose graph” config that explains why things exist.
+
+  Core Model
+
+  The central concept could be:
+
+  Mission
+    -> Outcomes
+      -> Capabilities
+        -> Features
+          -> Decisions
+            -> Code anchors
+
+  Example:
+
+  Mission:
+    Help solo developers remember why project decisions were made.
+
+  Outcome:
+    A maintainer can inspect any major feature and understand its purpose.
+
+  Capability:
+    Explain why a file, function, route, or module exists.
+
+  Feature:
+    Store project intent as a directed graph.
+
+  Decision:
+    Use repo-local config so intent evolves with code.
+
+  Code anchor:
+    src/intent/loadGraph.ts
+
+  The important thing is that the graph is not just documentation. It is a queryable model where the tool can answer:
+
+  Why does src/routes/explain.ts exist?
+
+  And return something deterministic like:
+
+  src/routes/explain.ts exists to support Feature F-003:
+  "Explain why a code element exists."
+
+  That feature supports Capability C-001:
+  "Map implementation artifacts back to project intent."
+
+  That capability supports Outcome O-001:
+  "A maintainer can inspect any major feature and understand its purpose."
+
+  That outcome supports Mission M-001:
+  "Help solo developers remember why project decisions were made."
+
+  Repository Shape
+
+  A minimal example repo could look like this:
+
+  example-purpose-graph-app/
+    README.md
+    package.json
+    src/
+      main.ts
+      routes/
+        explain.ts
+        graph.ts
+      intent/
+        loadGraph.ts
+        resolveAnchor.ts
+        validateGraph.ts
+    tests/
+      explain.test.ts
+
+    .purpose/
+      mission.yaml
+      graph.yaml
+      anchors.yaml
+      decisions/
+        D-001-repo-local-config.md
+        D-002-yaml-over-json.md
+
+  The .purpose/ directory is the tool’s configuration.
+
+  That keeps the idea close to existing conventions like .github/, .cursor/, .claude/, .vscode/, etc. It also makes the configuration version-controlled and reviewable.
+
+  Configuration Option 1: Explicit Graph Files
+
+  This is probably the clearest starting point.
+
+  # .purpose/mission.yaml
+  id: M-001
+  title: Help maintainers understand why the project exists
+  result: >
+    A maintainer can inspect any important code path and understand
+    what user-visible goal it supports.
+
+  # .purpose/graph.yaml
+  nodes:
+    - id: O-001
+      type: outcome
+      title: Maintainers can answer why a feature exists
+
+    - id: C-001
+      type: capability
+      title: Resolve code anchors to project intent
+
+    - id: F-001
+      type: feature
+      title: Explain a code artifact's purpose
+
+    - id: D-001
+      type: decision
+      title: Store purpose graph in repo-local config
+
+  edges:
+    - from: O-001
+      to: M-001
+      relation: supports
+
+    - from: C-001
+      to: O-001
+      relation: enables
+
+    - from: F-001
+      to: C-001
+      relation: implements
+
+    - from: D-001
+      to: F-001
+      relation: constrains
+
+  # .purpose/anchors.yaml
+  anchors:
+    - target: src/routes/explain.ts
+      node: F-001
+      reason: Provides the endpoint that answers "why does this exist?"
+
+    - target: src/intent/loadGraph.ts
+      node: D-001
+      reason: Loads the repo-local graph files chosen by the config decision.
+
+    - target: src/intent/resolveAnchor.ts#resolveAnchor
+      node: C-001
+      reason: Maps code artifacts to graph nodes.
+
+  This gives you a deterministic lookup path without needing AI in the loop.
+
+  Configuration Option 2: One Manifest File
+
+  Simpler for a tiny example:
+
+  .purpose.yaml
+
+  mission:
+    id: M-001
+    title: Help maintainers understand why the project exists
+
+  nodes:
+    - id: O-001
+      type: outcome
+      title: Maintainers can answer why a feature exists
+
+    - id: F-001
+      type: feature
+      title: Explain a code artifact's purpose
+
+  edges:
+    - from: F-001
+      to: O-001
+      relation: supports
+
+  anchors:
+    - target: src/routes/explain.ts
+      node: F-001
+
+  This is easier to explain, but less realistic long-term. I’d avoid starting here unless the goal is a very small demo.
+
+  Configuration Option 3: Distributed Purpose Files
+
+  Each module owns its own purpose metadata:
+
+  src/routes/explain.ts
+  src/routes/explain.purpose.yaml
+
+  node: F-001
+  supports:
+    - C-001
+  reason: Provides the user-facing explanation endpoint.
+
+  This is nice because intent lives near code, but it can become noisy. It also makes it harder to see the whole project mission at once.
+
+  A hybrid may be best:
+
+  .purpose/mission.yaml
+  .purpose/graph.yaml
+  src/routes/explain.purpose.yaml
+
+  The central graph defines project intent. Local files attach implementation details.
+
+  Configuration Option 4: Inline Code Annotations
+
+  Example:
+
+  // purpose: F-001
+  export async function explainCodeArtifact(target: string) {
+    ...
+  }
+
+  I would probably avoid this for the example repo. It is easy to understand but feels invasive, and it risks becoming another comment convention. Better to keep anchors external at first.
+
+  Recommended Example Repo Approach
+
+  I’d use this structure:
+
+  .purpose/
+    mission.yaml
+    graph.yaml
+    anchors.yaml
+    schema.json
+    decisions/
+      D-001-repo-local-config.md
+      D-002-explicit-anchors.md
+
+  Why this works:
+
+  - .purpose/ clearly belongs to the imaginary tool.
+  - mission.yaml makes the top-level goal obvious.
+  - graph.yaml represents the directed graph.
+  - anchors.yaml connects graph nodes to code.
+  - decisions/ gives richer explanations without bloating YAML.
+  - schema.json makes the format feel real and validateable.
+
+  Example Tool Behavior
+
+  The repo could include a fake CLI:
+
+  purpose why src/routes/explain.ts
+  purpose graph
+  purpose validate
+  purpose trace F-001
+  purpose orphan-code
+  purpose orphan-intent
+
+  Example output:
+
+  $ purpose why src/routes/explain.ts
+
+  src/routes/explain.ts
+    anchors to F-001: Explain a code artifact's purpose
+
+  Trace:
+    F-001 implements C-001: Resolve code anchors to project intent
+    C-001 enables O-001: Maintainers can answer why a feature exists
+    O-001 supports M-001: Help maintainers understand why the project exists
+
+  Decision context:
+    D-001: Store purpose graph in repo-local config
+
+  The most important command is why. Everything else supports that.
+
+  What The Example Project Should Be
+
+  The example app should probably be a small “purpose graph explorer” for itself.
+
+  That makes the repo self-demonstrating:
+
+  This repository is an example app that reads its own .purpose/ directory
+  and answers why parts of itself exist.
+
+  So the imaginary tool is used on a repo that demonstrates the imaginary tool’s configuration model.
+
+  The app does not need to be complex. It could expose:
+
+  GET /why?target=src/routes/explain.ts
+  GET /graph
+  GET /nodes/F-001
+
+  Or even just a CLI.
+
+  Important Design Tension
+
+  There are really two graphs:
+
+  1. The intent graph:
+
+     mission -> outcomes -> capabilities -> features -> decisions
+  2. The implementation graph:
+
+     files -> symbols -> tests -> configs -> docs
+
+  The tool’s value comes from connecting them.
+
+  For a minimal repo, don’t try to infer the implementation graph automatically. Start with explicit anchors:
+
+  target: src/routes/explain.ts
+  node: F-001
+
+  Later, the tool could add richer targets:
+
+  target:
+    file: src/routes/explain.ts
+    symbol: explainRoute
+    lines: [12, 48]
+
+  But the first version should avoid line-specific anchors unless the demo is specifically about precision. Line numbers drift.
+
+  Best Minimal Example
+
+  I’d make the repo contain:
+
+  README.md
+  src/
+    cli.ts
+    graph/load.ts
+    graph/trace.ts
+    anchors/resolve.ts
+
+  .purpose/
+    mission.yaml
+    graph.yaml
+    anchors.yaml
+    decisions/
+      D-001-purpose-directory.md
+
+  The README should show:
+
+  npm install
+  npm run purpose -- why src/graph/trace.ts
+  npm run purpose -- trace F-001
+  npm run purpose -- validate
+
+  And the key claim should be:
+
+  Every meaningful file in this repository can answer:
+  "This exists because ..."
+
+  That gives you a concrete example repository while keeping the philosophical part grounded in files, commands, and deterministic output.
+
+
+› This makes sense, let's do this. However, let's call it ydk (as in why development kit), also, I'd like to ensure the core model is defined as configuration. How would it make sense to define the core model?
+
+
+• For ydk, I’d make the core model itself configurable, not hardcoded as:
+
+  Mission -> Outcomes -> Capabilities -> Features -> Decisions -> Code
+
+  That chain is a good default, but the repo should demonstrate that ydk can define its own ontology.
+
+  The cleanest shape is:
+
+  .ydk/
+    model.yaml       # defines allowed node types, edge types, and rules
+    graph.yaml       # actual project-specific nodes and edges
+    anchors.yaml     # code/docs/tests mapped into graph nodes
+    decisions/
+
+  .ydk/model.yaml
+
+  This file defines what kinds of things can exist in the purpose graph.
+
+  version: 1
+
+  model:
+    nodeTypes:
+      mission:
+        description: The top-level result this project exists to create.
+        root: true
+        required: true
+        maxCount: 1
+
+      outcome:
+        description: A measurable or observable result that supports the mission.
+
+      capability:
+        description: A durable ability the project provides.
+
+      feature:
+        description: A user-facing or maintainer-facing behavior.
+
+      decision:
+        description: A technical or product choice that shapes implementation.
+
+      artifact:
+        description: A concrete repo artifact such as a file, symbol, test, or document.
+        anchorable: true
+
+    edgeTypes:
+      supports:
+        description: Source helps achieve target.
+        allowed:
+          - from: outcome
+            to: mission
+          - from: capability
+            to: outcome
+          - from: feature
+            to: capability
+          - from: decision
+            to: feature
+          - from: artifact
+            to: feature
+
+      constrains:
+        description: Source limits or shapes target.
+        allowed:
+          - from: decision
+            to: feature
+          - from: decision
+            to: capability
+          - from: decision
+            to: artifact
+
+      explains:
+        description: Source provides rationale for target.
+        allowed:
+          - from: decision
+            to: artifact
+          - from: feature
+            to: artifact
+
+    requiredPaths:
+      artifact:
+        mustReach:
+          - mission
+
+    validation:
+      requireAllAnchorsResolve: true
+      requireAllNodesReachRoot: true
+      allowCycles: false
+
+  Then the actual project graph uses that model.
+
+  .ydk/graph.yaml
+
+  version: 1
+
+  nodes:
+    - id: M-001
+      type: mission
+      title: Help maintainers understand why code exists
+      statement: >
+        ydk exists so a maintainer can inspect meaningful project artifacts
+        and trace them back to the result the project was created to produce.
+
+    - id: O-001
+      type: outcome
+      title: Maintainers can answer why a feature exists
+
+    - id: C-001
+      type: capability
+      title: Resolve implementation artifacts to project intent
+
+    - id: F-001
+      type: feature
+      title: Explain why a repo artifact exists
+
+    - id: D-001
+      type: decision
+      title: Store the purpose model in repo-local configuration
+
+  edges:
+    - from: O-001
+      to: M-001
+      type: supports
+
+    - from: C-001
+      to: O-001
+      type: supports
+
+    - from: F-001
+      to: C-001
+      type: supports
+
+    - from: D-001
+      to: F-001
+      type: constrains
+
+  .ydk/anchors.yaml
+
+  version: 1
+
+  anchors:
+    - target:
+        kind: file
+        path: src/cli.ts
+      node: F-001
+      reason: Provides the command interface for asking why an artifact exists.
+
+    - target:
+        kind: file
+        path: src/model/loadModel.ts
+      node: D-001
+      reason: Loads the repo-local model definition.
+
+    - target:
+        kind: file
+        path: .ydk/model.yaml
+      node: D-001
+      reason: Defines the configurable purpose ontology used by this project.
+
+  The key distinction:
+
+  model.yaml = what kinds of meaning are allowed
+  graph.yaml = this project’s actual meaning
+  anchors.yaml = where that meaning touches the repo
+
+  That gives ydk a strong dogfooding story. The example repo can say:
+
+  ydk uses ydk configuration to explain why ydk exists.
+
+  Why this is better than hardcoding
+
+  Hardcoding mission, outcome, capability, feature, and decision would make the framework feel opinionated in a brittle way.
+
+  Making the model configurable lets different projects define different structures:
+
+  Product app:
+    mission -> user outcomes -> capabilities -> features -> decisions
+
+  Library:
+    mission -> use cases -> APIs -> modules -> decisions
+
+  Infrastructure:
+    mission -> guarantees -> services -> resources -> runbooks
+
+  Research project:
+    thesis -> claims -> experiments -> implementations -> evidence
+
+  Same tool, different ontology.
+
+  Minimal Rule Set
+
+  For the example repo, I’d only enforce a few rules:
+
+  validation:
+    requireExactlyOneRoot: true
+    requireAllNodesReachRoot: true
+    requireAllAnchorsResolve: true
+    allowCycles: false
+
+  That is enough to make the graph meaningful without turning the model into a complex schema language too early.
+
+  One Design Choice I’d Make
+
+  I would not make artifact a normal node at first.
+
+  Instead, keep repo artifacts in anchors.yaml.
+
+  So the intent graph stays about meaning:
+
+  Mission -> Outcome -> Capability -> Feature -> Decision
+
+  And anchors connect files/functions/tests/docs to that graph:
+
+  src/cli.ts -> F-001
+
+  That keeps the graph cleaner. Later, if artifacts need first-class identity, ydk can add artifact nodes.
+
+  So my recommended first model is:
+
+  .ydk/model.yaml   # ontology/rules
+  .ydk/graph.yaml   # purpose graph
+  .ydk/anchors.yaml # repo artifact mappings
+
+  And the first working promise of ydk is:
+
+  Given a repo artifact, return the shortest valid explanation path from that artifact to the project mission.
+
+
+› Ok this makes sense. Continue on implementing the example project.

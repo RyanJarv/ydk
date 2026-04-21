@@ -1,0 +1,50 @@
+version: 1
+
+anchors:
+  - target:
+      kind: file
+      path: .ydk/model.yaml
+    node: D-001
+    reason: Defines the configurable ontology used by this project.
+
+  - target:
+      kind: file
+      path: .ydk/graph.yaml
+    node: D-001
+    reason: Stores the project-specific purpose graph in version control.
+
+  - target:
+      kind: file
+      path: .ydk/anchors.yaml
+    node: D-002
+    reason: Keeps implementation artifact mappings separate from the intent graph.
+
+  - target:
+      kind: file
+      path: src/cli.ts
+    node: F-001
+    reason: Provides the command interface for asking why an artifact exists.
+
+  - target:
+      kind: file
+      path: src/graph/loadProject.ts
+    node: D-001
+    reason: Loads the repo-local ydk configuration files.
+
+  - target:
+      kind: file
+      path: src/graph/resolveWhy.ts
+    node: F-001
+    reason: Resolves an anchored artifact to its explanation path.
+
+  - target:
+      kind: file
+      path: src/graph/trace.ts
+    node: C-001
+    reason: Walks the purpose graph from a node toward the mission.
+
+  - target:
+      kind: file
+      path: src/graph/validateProject.ts
+    node: F-002
+    reason: Checks the graph and anchors against the configured model.

@@ -1,0 +1,62 @@
+version: 1
+
+nodes:
+  - id: M-001
+    type: mission
+    title: Help maintainers understand why code exists
+    statement: >
+      ydk exists so a maintainer can inspect meaningful project artifacts
+      and trace them back to the result the project was created to produce.
+
+  - id: O-001
+    type: outcome
+    title: Maintainers can answer why a feature exists
+
+  - id: C-001
+    type: capability
+    title: Resolve implementation artifacts to project intent
+
+  - id: F-001
+    type: feature
+    title: Explain why a repo artifact exists
+
+  - id: F-002
+    type: feature
+    title: Validate the purpose graph against the configured model
+
+  - id: D-001
+    type: decision
+    title: Store the purpose model in repo-local configuration
+
+  - id: D-002
+    type: decision
+    title: Keep repo artifacts outside the intent graph
+
+edges:
+  - from: O-001
+    to: M-001
+    type: supports
+
+  - from: C-001
+    to: O-001
+    type: supports
+
+  - from: F-001
+    to: C-001
+    type: supports
+
+  - from: F-002
+    to: C-001
+    type: supports
+
+  - from: D-001
+    to: F-001
+    type: constrains
+
+  - from: D-001
+    to: F-002
+    type: constrains
+
+  - from: D-002
+    to: C-001
+    type: constrains
