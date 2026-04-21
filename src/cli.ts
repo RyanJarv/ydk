@@ -39,6 +39,9 @@ async function main(): Promise<void> {
     }
 
     console.log(`${result.anchor.target.path}`);
+    if (result.matchedPattern) {
+      console.log(`  matched pattern for ${value}`);
+    }
     console.log(`  anchored to ${result.anchor.node}`);
     console.log(`  ${result.anchor.reason}`);
     console.log("");

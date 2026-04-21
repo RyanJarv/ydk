@@ -24,6 +24,25 @@ test("resolves a file to an explanation path ending at the mission", async () =>
   assert.equal(result.trace.at(-1)?.node.id, "M-001");
 });
 
+test("resolves a file using a pattern anchor", async () => {
+  const project = await loadProject();
+  project.anchors.anchors.push({
+    target: {
+      kind: "filePattern",
+      path: ".pit/prompts/*.yaml",
+    },
+    node: "F-001",
+    reason: "Stores prompt snapshots produced by pit.",
+  });
+
+  const result = resolveWhy(project, ".pit/prompts/P-0001.yaml");
+
+  assert.ok(result);
+  assert.equal(result.anchor.node, "F-001");
+  assert.equal(result.matchedPattern, ".pit/prompts/*.yaml");
+  assert.equal(result.trace.at(-1)?.node.id, "M-001");
+});
+
 test("traces graph nodes to the configured root", async () => {
   const project = await loadProject();
   const trace = traceToRoot(project.graph, project.model, "D-002");

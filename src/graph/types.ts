@@ -51,7 +51,7 @@ export type GraphConfig = {
 };
 
 export type AnchorTarget = {
-  kind: "file" | "symbol" | string;
+  kind: "file" | "filePattern" | "symbol" | string;
   path: string;
   symbol?: string;
 };
