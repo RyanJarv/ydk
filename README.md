@@ -34,3 +34,9 @@ The first promise of `ydk` is deterministic:
 ```text
 Given a repo artifact, return a valid explanation path from that artifact to the project mission.
 ```
+
+## Possible Direction Examples
+
+See [./docs/examples](./docs/examples/README.md)
+
+
