@@ -27,16 +27,6 @@ $ ydk why src/cli.ts --json
   ]
 }
 
-# The agent asks for constraints that may affect the change.
-$ ydk constraints F-001
-D-001 Store the purpose model in repo-local configuration
-  constrains F-001
-  rationale: .ydk/decisions/D-001-repo-local-configuration.md
-
-# Fictional agent note, inferred from the ydk output:
-# "This change should preserve deterministic local output and should not require
-# a remote service, because the feature is part of the local explanation workflow."
-
 $ agent edit src/cli.ts src/format/json.ts tests/json-output.test.ts
 Edited:
   src/cli.ts
@@ -60,13 +50,12 @@ Changed files:
     ignored by policy: tests may anchor indirectly through covered source files
 
 Recommended graph update:
-  Add decision D-003: Support machine-readable output for tool integrations
-  Anchor src/format/json.ts to D-003
-  Connect D-003 constrains F-001
+  Anchor src/format/json.ts to F-001
+  Add or update a feature node only if JSON output has a distinct current purpose
 
 # The agent presents this to the user instead of inventing project intent silently.
-$ agent "I added JSON output. ydk review suggests recording a decision because this
-changes the CLI contract for downstream tools. Shall I add D-003?"
+$ agent "I added JSON output. ydk review suggests anchoring the new formatter to
+the existing artifact explanation feature. Shall I update .ydk/anchors.yaml?"
 ```
 
 ## Behavior Notes
@@ -75,10 +64,9 @@ The important behavior is not that the agent blindly obeys the graph or treats i
 
 - What is this file for?
 - What result does this feature support?
-- What decisions constrain this area?
 - Does this change introduce a new purpose or only support an existing one?
 
-For agent use, JSON output is more important than polished human output. The tool should expose stable IDs, edge types, target paths, and rationale document paths.
+For agent use, JSON output is more important than polished human output. The tool should expose stable IDs, edge types, target paths, and anchor reasons.
 
 ## Pros and Cons
 
@@ -98,4 +86,4 @@ Cons:
 
 ## Review Feedback
 
-The reviewer found the agent workflow clear: query intent and constraints before editing, then use a purpose-aware review after changing files. They recommended softening the framing so `ydk` reads as structured repo context and confidence, not an automatic source of project intent. They also called out that generated agent notes should be labeled as inferences from `ydk` output.
+The reviewer found the agent workflow clear: query intent before editing, then use a purpose-aware review after changing files. They recommended softening the framing so `ydk` reads as structured repo context and confidence, not an automatic source of project intent. They also called out that generated agent notes should be labeled as inferences from `ydk` output.

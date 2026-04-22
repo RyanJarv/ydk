@@ -57,8 +57,7 @@ hoverProvider.onHover(documentPath="src/cli.ts")
 # The user opens the extension panel.
 panel.render(selectedArtifact="src/cli.ts")
   selectedNode = "F-001"
-  relatedDecisions = ["D-001 Store the purpose model in repo-local configuration"]
-  actions = ["Open rationale", "Show impacted artifacts", "Copy explanation", "Create missing anchor"]
+  actions = ["Show impacted artifacts", "Copy explanation", "Create missing anchor"]
 
 # In a pull request, a bot uses the same library API inside a webhook handler.
 webhook.pull_request.opened(files=["src/format/json.ts", "src/cli.ts"])
@@ -71,7 +70,7 @@ webhook.pull_request.opened(files=["src/format/json.ts", "src/cli.ts"])
   Nearby anchored file src/cli.ts maps to F-001.
 
   Suggested action:
-    Add an anchor or mark this path ignored in .ydk/model.yaml policy.
+    Add an anchor or mark this path ignored in CI policy.
   """)
 ```
 
@@ -83,12 +82,12 @@ Library integration depends on a stable public API more than CLI polish. The use
 loadProject(root): Promise<YdkProject>
 validateProject(project): ValidationResult
 resolveWhy(project, target): WhyResult | null
-traceToRoot(graph, model, nodeId): TraceStep[] | null
+traceToRoot(graph, nodeId): TraceStep[] | null
 ```
 
 Other tools should not need to understand YAML details directly. They should consume a normalized model with typed nodes, edges, anchors, and validation diagnostics.
 
-This direction also implies that `.ydk/model.yaml` is a portable data contract. If the format is clear, other tools can consume the graph without depending on the official CLI.
+The graph and anchor files are the portable data contract. If the format is clear, other tools can consume the graph without depending on the official CLI.
 
 ## Pros and Cons
 

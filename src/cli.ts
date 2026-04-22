@@ -50,7 +50,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "trace" && value) {
-    const trace = traceToRoot(project.graph, project.model, value);
+    const trace = traceToRoot(project.graph, value);
     if (!trace) {
       console.error(`No trace found for ${value}`);
       process.exitCode = 1;

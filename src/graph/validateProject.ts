@@ -1,10 +1,13 @@
 import { traceToRoot } from "./trace.js";
-import type { GraphEdge, GraphNode, ModelConfig, NodeId, YdkProject } from "./types.js";
+import type { GraphEdge, GraphNode, NodeId, YdkProject } from "./types.js";
 
 export type ValidationResult = {
   ok: boolean;
   errors: string[];
 };
+
+const ALLOWED_NODE_TYPES = new Set(["mission", "outcome", "capability", "feature"]);
+const ALLOWED_EDGE_TYPES = new Set(["supports"]);
 
 function findDuplicateIds(nodes: GraphNode[]): NodeId[] {
   const seen = new Set<NodeId>();
@@ -18,16 +21,6 @@ function findDuplicateIds(nodes: GraphNode[]): NodeId[] {
   }
 
   return [...duplicates];
-}
-
-function isAllowedEdge(model: ModelConfig, edge: GraphEdge, from: GraphNode, to: GraphNode): boolean {
-  const edgeType = model.model.edgeTypes[edge.type];
-  if (!edgeType) {
-    return false;
-  }
-
-  const allowed = edgeType.allowed ?? [];
-  return allowed.some((candidate) => candidate.from === from.type && candidate.to === to.type);
 }
 
 function hasCycle(edges: GraphEdge[]): boolean {
@@ -65,8 +58,6 @@ function hasCycle(edges: GraphEdge[]): boolean {
 
 export function validateProject(project: YdkProject): ValidationResult {
   const errors: string[] = [];
-  const validation = project.model.model.validation ?? {};
-  const nodeTypes = project.model.model.nodeTypes;
   const nodes = new Map(project.graph.nodes.map((node) => [node.id, node]));
   const duplicateIds = findDuplicateIds(project.graph.nodes);
 
@@ -75,29 +66,14 @@ export function validateProject(project: YdkProject): ValidationResult {
   }
 
   for (const node of project.graph.nodes) {
-    if (!nodeTypes[node.type]) {
+    if (!ALLOWED_NODE_TYPES.has(node.type)) {
       errors.push(`Node ${node.id} uses unknown type: ${node.type}`);
     }
   }
 
-  for (const [type, definition] of Object.entries(nodeTypes)) {
-    const matchingNodes = project.graph.nodes.filter((node) => node.type === type);
-    if (definition.required && matchingNodes.length === 0) {
-      errors.push(`Required node type has no nodes: ${type}`);
-    }
-    if (definition.maxCount !== undefined && matchingNodes.length > definition.maxCount) {
-      errors.push(`Node type ${type} allows at most ${definition.maxCount} node(s), found ${matchingNodes.length}`);
-    }
-  }
-
-  const rootTypes = new Set(
-    Object.entries(nodeTypes)
-      .filter(([, definition]) => definition.root)
-      .map(([type]) => type),
-  );
-  const rootNodes = project.graph.nodes.filter((node) => rootTypes.has(node.type));
-  if (validation.requireExactlyOneRoot && rootNodes.length !== 1) {
-    errors.push(`Expected exactly one root node, found ${rootNodes.length}`);
+  const missionNodes = project.graph.nodes.filter((node) => node.type === "mission");
+  if (missionNodes.length !== 1) {
+    errors.push(`Expected exactly one mission node, found ${missionNodes.length}`);
   }
 
   for (const edge of project.graph.edges) {
@@ -114,28 +90,28 @@ export function validateProject(project: YdkProject): ValidationResult {
       continue;
     }
 
-    if (!isAllowedEdge(project.model, edge, from, to)) {
-      errors.push(`Edge ${edge.from} -> ${edge.to} has invalid type/type pairing: ${edge.type} ${from.type}->${to.type}`);
+    if (!ALLOWED_EDGE_TYPES.has(edge.type)) {
+      errors.push(`Edge ${edge.from} -> ${edge.to} uses unknown type: ${edge.type}`);
+    }
+
+    if (from.type === "mission") {
+      errors.push(`Mission node should not support another node: ${edge.from} -> ${edge.to}`);
     }
   }
 
-  if (validation.allowCycles === false && hasCycle(project.graph.edges)) {
+  if (hasCycle(project.graph.edges)) {
     errors.push("Graph contains a cycle");
   }
 
-  if (validation.requireAllNodesReachRoot) {
-    for (const node of project.graph.nodes) {
-      if (!traceToRoot(project.graph, project.model, node.id)) {
-        errors.push(`Node does not reach a root: ${node.id}`);
-      }
+  for (const node of project.graph.nodes) {
+    if (!traceToRoot(project.graph, node.id)) {
+      errors.push(`Node does not reach the mission: ${node.id}`);
     }
   }
 
-  if (validation.requireAllAnchorsResolve) {
-    for (const anchor of project.anchors.anchors) {
-      if (!nodes.has(anchor.node)) {
-        errors.push(`Anchor ${anchor.target.path} references unknown node: ${anchor.node}`);
-      }
+  for (const anchor of project.anchors.anchors) {
+    if (!nodes.has(anchor.node)) {
+      errors.push(`Anchor ${anchor.target.path} references unknown node: ${anchor.node}`);
     }
   }
 

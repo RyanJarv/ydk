@@ -4,7 +4,7 @@
 
 This direction treats `ydk` as a maintainer-facing command line tool. A developer uses it while reading, changing, or deleting code to answer "why does this exist?" without opening a wiki, issue tracker, or long project guide.
 
-The tool stays deterministic: it reads `.ydk/model.yaml`, `.ydk/graph.yaml`, and `.ydk/anchors.yaml`, then traces an artifact to the project mission.
+The tool stays deterministic: it reads `.ydk/graph.yaml` and `.ydk/anchors.yaml`, then traces an artifact to the project mission.
 
 ## Session Log
 
@@ -29,9 +29,6 @@ F-001
   type: feature
   title: Explain why a repo artifact exists
 
-Supported by:
-  D-001 constrains F-001
-
 Supports:
   F-001 supports C-001
 
@@ -52,7 +49,7 @@ Potential impact:
 Before deleting this artifact, either:
   - move the anchor to a replacement artifact
   - remove F-001 if the feature is no longer part of the project
-  - record a new decision explaining why the feature is being retired
+  - update the graph if this purpose is no longer current
 
 # The maintainer checks whether the graph has stale references.
 $ ydk validate

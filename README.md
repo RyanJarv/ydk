@@ -17,16 +17,13 @@ npm run ydk -- validate
 
 ```text
 .ydk/
-  model.yaml    # defines the core model: node types, edge types, and validation rules
-  graph.yaml    # defines this project's purpose graph
+  graph.yaml    # defines this project's current purpose graph
   anchors.yaml  # maps repo artifacts to graph nodes
-  decisions/    # longer rationale for decisions referenced by the graph
 ```
 
 The important split is:
 
-- `model.yaml` defines what kinds of meaning are allowed.
-- `graph.yaml` defines this project's actual meaning.
+- `graph.yaml` defines this project's current intended purpose.
 - `anchors.yaml` defines where that meaning touches the repo.
 
 The first promise of `ydk` is deterministic:
@@ -38,5 +35,4 @@ Given a repo artifact, return a valid explanation path from that artifact to the
 ## Possible Direction Examples
 
 See [./docs/examples](./docs/examples/README.md)
-
 

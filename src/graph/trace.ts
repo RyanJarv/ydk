@@ -1,14 +1,6 @@
-import type { GraphConfig, GraphEdge, GraphNode, ModelConfig, NodeId, TraceStep } from "./types.js";
+import type { GraphConfig, GraphEdge, GraphNode, NodeId, TraceStep } from "./types.js";
 
-function rootTypes(model: ModelConfig): Set<string> {
-  return new Set(
-    Object.entries(model.model.nodeTypes)
-      .filter(([, definition]) => definition.root)
-      .map(([type]) => type),
-  );
-}
-
-export function traceToRoot(graph: GraphConfig, model: ModelConfig, startId: NodeId): TraceStep[] | null {
+export function traceToRoot(graph: GraphConfig, startId: NodeId): TraceStep[] | null {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
   const outgoing = new Map<NodeId, GraphEdge[]>();
 
@@ -23,7 +15,6 @@ export function traceToRoot(graph: GraphConfig, model: ModelConfig, startId: Nod
     return null;
   }
 
-  const roots = rootTypes(model);
   const queue: Array<{ node: GraphNode; path: TraceStep[] }> = [
     { node: start, path: [{ node: start }] },
   ];
@@ -35,7 +26,7 @@ export function traceToRoot(graph: GraphConfig, model: ModelConfig, startId: Nod
       break;
     }
 
-    if (roots.has(current.node.type)) {
+    if (current.node.type === "mission") {
       return current.path;
     }
 

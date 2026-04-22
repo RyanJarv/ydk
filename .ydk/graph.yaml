@@ -22,15 +22,7 @@ nodes:
 
   - id: F-002
     type: feature
-    title: Validate the purpose graph against the configured model
-
-  - id: D-001
-    type: decision
-    title: Store the purpose model in repo-local configuration
-
-  - id: D-002
-    type: decision
-    title: Keep repo artifacts outside the intent graph
+    title: Validate that the current purpose graph reaches the mission
 
 edges:
   - from: O-001
@@ -48,15 +40,3 @@ edges:
   - from: F-002
     to: C-001
     type: supports
-
-  - from: D-001
-    to: F-001
-    type: constrains
-
-  - from: D-001
-    to: F-002
-    type: constrains
-
-  - from: D-002
-    to: C-001
-    type: constrains

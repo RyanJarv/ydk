@@ -26,10 +26,6 @@ Errors:
   New source artifact has no anchor:
     src/format/json.ts
 
-Warnings:
-  Changed artifact is anchored to F-001 but no nearby decision explains output formats:
-    src/cli.ts
-
 Suggested next step:
   ydk propose-anchor src/format/json.ts
 
@@ -49,25 +45,17 @@ Reasoning:
   src/cli.ts is anchored to F-001
   F-001 supports the artifact explanation workflow
 
-# The developer adds the anchor and records the product/technical decision.
-$ vim .ydk/anchors.yaml .ydk/graph.yaml .ydk/decisions/D-003-json-output.md
+# The developer adds the anchor. They only edit the graph if JSON output is a
+# distinct current purpose rather than an implementation detail of F-001.
+$ vim .ydk/anchors.yaml
 
 $ git diff -- .ydk
-diff --git a/.ydk/graph.yaml b/.ydk/graph.yaml
-+  - id: D-003
-+    type: decision
-+    title: Support JSON output for downstream tools
-
-+  - from: D-003
-+    to: F-001
-+    type: constrains
-
 diff --git a/.ydk/anchors.yaml b/.ydk/anchors.yaml
 +  - target:
 +      kind: file
 +      path: src/format/json.ts
-+    node: D-003
-+    reason: Implements the JSON output decision for tool integrations.
++    node: F-001
++    reason: Formats why/trace output for machine-readable consumers.
 
 # The CI check now passes.
 $ ydk ci
@@ -76,7 +64,6 @@ ydk ci passed
 Summary:
   Changed anchored artifacts: 2
   New anchored artifacts: 1
-  New decisions: 1
   Nodes that do not reach mission: 0
 ```
 
@@ -89,8 +76,7 @@ Useful optional CI policies could include:
 - New files under `src/` require anchors.
 - New graph nodes must reach the mission.
 - Removed files must not leave broken anchors.
-- Changed public APIs should be connected to a feature or decision.
-- Decision nodes require a matching markdown rationale file.
+- Changed public APIs should be connected to a feature.
 
 These should be configurable, not universal defaults. A prototype could start with warnings and let a project promote specific checks to failures after the workflow proves useful.
 

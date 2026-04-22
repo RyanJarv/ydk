@@ -45,11 +45,11 @@ test("resolves a file using a pattern anchor", async () => {
 
 test("traces graph nodes to the configured root", async () => {
   const project = await loadProject();
-  const trace = traceToRoot(project.graph, project.model, "D-002");
+  const trace = traceToRoot(project.graph, "F-002");
 
   assert.ok(trace);
   assert.deepEqual(
     trace.map((step) => step.node.id),
-    ["D-002", "C-001", "O-001", "M-001"],
+    ["F-002", "C-001", "O-001", "M-001"],
   );
 });

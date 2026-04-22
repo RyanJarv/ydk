@@ -30,7 +30,7 @@ export function resolveWhy(project: YdkProject, target: string): WhyResult | nul
     return null;
   }
 
-  const trace = traceToRoot(project.graph, project.model, anchor.node);
+  const trace = traceToRoot(project.graph, anchor.node);
   if (!trace) {
     return null;
   }
