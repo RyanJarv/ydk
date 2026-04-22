@@ -4,6 +4,10 @@
 
 This repository dogfoods the idea. `ydk` has a small built-in model, and the `.ydk/` directory defines the graph and anchors that connect project intent to this repository's own files.
 
+## Why?
+
+Exactly
+
 ## Try it
 
 ```bash
