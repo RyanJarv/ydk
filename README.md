@@ -6,7 +6,9 @@ This repository dogfoods the idea. `ydk` has a small built-in model, and the `.y
 
 ## Why?
 
-Exactly
+Exactly.
+
+If your question is how? Take a look at [pit](https://github.com/RyanJarv/pit). These concepts might make sense to merge, but it's unclear how.
 
 ## Try it
 
