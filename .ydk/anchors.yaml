@@ -21,6 +21,12 @@ anchors:
 
   - target:
       kind: file
+      path: docs/MODEL.md
+    node: C-001
+    reason: Documents the built-in purpose model and per-repo configuration surface.
+
+  - target:
+      kind: file
       path: src/cli.ts
     node: F-001
     reason: Provides the command interface for asking why an artifact exists.
