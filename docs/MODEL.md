@@ -46,6 +46,8 @@ This means feature `F-001` supports capability `C-001`.
 - The graph must not contain cycles.
 - Every node must trace to the mission.
 - Every anchor must reference an existing node.
+- Every concrete anchor target must exist on disk or in the relevant package script table.
+- Pattern anchors are matched structurally and do not need to exist as a single concrete path.
 
 These rules are built into `ydk`; they are not configured per repo.
 
@@ -106,6 +108,28 @@ edges:
 
 `anchors.yaml` maps repo artifacts to graph nodes.
 
+Each target kind provides three pieces of behavior:
+
+- how a user query matches the target
+- how specific the match is relative to broader targets
+- how validation checks whether the target still exists
+
+The initial target kinds are `file`, `filePattern`, `directory`, and `packageScript`.
+
+#### Anchor Target Kinds
+
+| Kind | `value` shape | Query form | Validation |
+| --- | --- | --- | --- |
+| `file` | string file path | `src/cli.ts` | `value` must exist and be a file. |
+| `filePattern` | string glob pattern | any path matched by the pattern | Pattern syntax is checked structurally by matching; no single concrete path must exist. |
+| `directory` | string directory path | the directory path or any path under it | `value` must exist and be a directory. |
+| `packageScript` | object with `path` and `script` | `package.json#test` | `path` must exist, be readable JSON, and contain `scripts[script]`. |
+
+`target.value` intentionally changes shape by target kind. Path-like targets use
+a string. Targets that identify something inside another artifact use an object.
+This keeps the generic target interface from pretending every target is a file
+path.
+
 Exact file anchor:
 
 ```yaml
@@ -114,7 +138,7 @@ version: 1
 anchors:
   - target:
       kind: file
-      path: src/cli.ts
+      value: src/cli.ts
     node: F-001
     reason: Provides the command interface for adding and inspecting prompt snapshots.
 ```
@@ -125,12 +149,50 @@ Pattern anchor:
 anchors:
   - target:
       kind: filePattern
-      path: .pit/prompts/*.yaml
+      value: .pit/prompts/*.yaml
     node: C-001
     reason: Stores prompt snapshots produced during experiments.
 ```
 
-Exact file anchors take precedence over pattern anchors.
+Directory anchor:
+
+```yaml
+anchors:
+  - target:
+      kind: directory
+      value: docs/examples
+    node: C-001
+    reason: Explains the docs example set.
+```
+
+Package script anchor:
+
+```yaml
+anchors:
+  - target:
+      kind: packageScript
+      value:
+        path: package.json
+        script: build
+    node: F-002
+    reason: Builds the repository before validation.
+```
+
+Exact file anchors take precedence over directory and pattern anchors.
+Package script anchors resolve from `path#symbol` targets such as `package.json#build`.
+
+## Browser Explorer
+
+`ydk serve` starts a local web server for browsing the current project graph:
+
+```bash
+npm run ydk -- serve
+```
+
+The browser UI is intentionally project-focused. It uses the graph to show the
+project mission, the result and capability chain beneath it, and the artifacts
+anchored to each node. This makes the graph useful as a project map instead of
+only a raw node-edge diagram.
 
 ## What Was Removed
 
@@ -146,4 +208,3 @@ Decision nodes and `.ydk/decisions/` were also removed from the core model.
 Historical rationale can still live in `docs/`, issues, pull requests, commits,
 or ADR-style documents, but the `.ydk/` graph should represent current intended
 purpose.
-

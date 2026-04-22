@@ -9,10 +9,12 @@
   },
   "scripts": {
     "ydk": "tsx src/cli.ts",
+    "serve": "tsx src/cli.ts serve",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "vue": "^3.5.32",
     "yaml": "^2.7.0"
   },
   "devDependencies": {

@@ -85,7 +85,7 @@ Pros:
 
 - Easy to understand and demo.
 - Useful without integrating into another system.
-- Keeps the model reviewable in git.
+- Keeps the purpose graph reviewable in git.
 - Gives maintainers a low-friction answer to "why does this exist?"
 
 Cons:

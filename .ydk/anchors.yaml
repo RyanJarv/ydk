@@ -3,54 +3,134 @@ version: 1
 anchors:
   - target:
       kind: file
-      path: .ydk/graph.yaml
+      value: README.md
+    node: O-001
+    reason: Introduces the project goal, configuration split, and first user workflow.
+
+  - target:
+      kind: file
+      value: package.json
+    node: C-001
+    reason: Defines the runnable project entrypoints and dependencies needed to load, validate, and query the purpose graph.
+
+  - target:
+      kind: file
+      value: tsconfig.json
+    node: C-001
+    reason: Keeps the TypeScript implementation checked against the assumptions used by the graph tooling.
+
+  - target:
+      kind: file
+      value: .ydk/graph.yaml
     node: C-001
     reason: Stores the current-state purpose graph in version control.
 
   - target:
       kind: file
-      path: .ydk/anchors.yaml
+      value: .ydk/anchors.yaml
     node: C-001
     reason: Maps repo artifacts to the purpose graph without adding each artifact as a graph node.
 
   - target:
       kind: file
-      path: docs/design-log.md
+      value: docs/design-log.md
     node: C-001
     reason: Records historical design rationale outside the current-purpose graph.
 
   - target:
       kind: file
-      path: docs/MODEL.md
+      value: docs/MODEL.md
     node: C-001
     reason: Documents the built-in purpose model and per-repo configuration surface.
 
   - target:
+      kind: directory
+      value: docs/examples
+    node: C-001
+    reason: Explores possible ways the purpose graph could be used by people and tools.
+
+  - target:
+      kind: packageScript
+      value:
+        path: package.json
+        script: ydk
+    node: F-001
+    reason: Runs the CLI entrypoint used to ask why project artifacts exist.
+
+  - target:
+      kind: packageScript
+      value:
+        path: package.json
+        script: serve
+    node: F-001
+    reason: Starts the local browser explorer for understanding the project purpose graph.
+
+  - target:
+      kind: packageScript
+      value:
+        path: package.json
+        script: typecheck
+    node: F-002
+    reason: Checks the implementation types before relying on the graph behavior.
+
+  - target:
+      kind: packageScript
+      value:
+        path: package.json
+        script: test
+    node: F-002
+    reason: Runs the validation tests that protect current graph behavior.
+
+  - target:
       kind: file
-      path: src/cli.ts
+      value: src/cli.ts
     node: F-001
     reason: Provides the command interface for asking why an artifact exists.
 
   - target:
       kind: file
-      path: src/graph/loadProject.ts
+      value: src/graph/loadProject.ts
     node: C-001
     reason: Loads the repo-local purpose graph and anchors.
 
   - target:
       kind: file
-      path: src/graph/resolveWhy.ts
+      value: src/graph/resolveWhy.ts
     node: F-001
     reason: Resolves an anchored artifact to its explanation path.
 
   - target:
       kind: file
-      path: src/graph/trace.ts
+      value: src/graph/targetResolver.ts
+    node: C-001
+    reason: Defines how supported target kinds match queries, validate existence, and display themselves.
+
+  - target:
+      kind: file
+      value: src/graph/trace.ts
     node: C-001
     reason: Walks the purpose graph from a node toward the mission.
 
   - target:
       kind: file
-      path: src/graph/validateProject.ts
+      value: src/graph/types.ts
+    node: C-001
+    reason: Defines the graph, anchor, and trace data structures shared by the tooling.
+
+  - target:
+      kind: file
+      value: src/graph/validateProject.ts
     node: F-002
     reason: Checks that the graph and anchors are internally consistent.
+
+  - target:
+      kind: filePattern
+      value: src/serve/**
+    node: F-001
+    reason: Provides the local web explorer used to browse the project purpose map.
+
+  - target:
+      kind: filePattern
+      value: tests/*.test.ts
+    node: F-002
+    reason: Exercises the current graph, target resolver, and validation behavior.

@@ -36,7 +36,7 @@ Suggested anchor:
 
   - target:
       kind: file
-      path: src/format/json.ts
+      value: src/format/json.ts
     node: F-001
     reason: Formats why/trace output for machine-readable consumers.
 
@@ -53,7 +53,7 @@ $ git diff -- .ydk
 diff --git a/.ydk/anchors.yaml b/.ydk/anchors.yaml
 +  - target:
 +      kind: file
-+      path: src/format/json.ts
++      value: src/format/json.ts
 +    node: F-001
 +    reason: Formats why/trace output for machine-readable consumers.
 

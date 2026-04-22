@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { loadProject } from "./graph/loadProject.js";
 import { resolveWhy } from "./graph/resolveWhy.js";
+import { serveProject } from "./serve/server.js";
 import { traceToRoot } from "./graph/trace.js";
 import { validateProject } from "./graph/validateProject.js";
 
@@ -11,6 +12,7 @@ function usage(): string {
     "  ydk trace <node-id>",
     "  ydk validate",
     "  ydk graph",
+    "  ydk serve [--host <host>] [--port <port>]",
   ].join("\n");
 }
 
@@ -28,6 +30,12 @@ function formatTrace(trace: NonNullable<ReturnType<typeof traceToRoot>>): string
 
 async function main(): Promise<void> {
   const [command, value] = process.argv.slice(2);
+
+  if (command === "serve") {
+    await serveProject(parseServeOptions(process.argv.slice(3)));
+    return;
+  }
+
   const project = await loadProject();
 
   if (command === "why" && value) {
@@ -38,7 +46,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    console.log(`${result.anchor.target.path}`);
+    console.log(result.displayTarget);
     if (result.matchedPattern) {
       console.log(`  matched pattern for ${value}`);
     }
@@ -84,6 +92,31 @@ async function main(): Promise<void> {
 
   console.log(usage());
   process.exitCode = 1;
+}
+
+function parseServeOptions(args: string[]): { host?: string; port?: number } {
+  const options: { host?: string; port?: number } = {};
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const next = args[index + 1];
+
+    if (arg === "--host" && next) {
+      options.host = next;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--port" && next) {
+      const port = Number(next);
+      if (Number.isInteger(port) && port > 0) {
+        options.port = port;
+      }
+      index += 1;
+    }
+  }
+
+  return options;
 }
 
 main().catch((error: unknown) => {

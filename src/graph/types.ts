@@ -19,11 +19,39 @@ export type GraphConfig = {
   edges: GraphEdge[];
 };
 
-export type AnchorTarget = {
-  kind: "file" | "filePattern" | "symbol" | string;
-  path: string;
-  symbol?: string;
+export type PathTargetKind = "file" | "filePattern" | "directory";
+
+export type PathAnchorTarget = {
+  kind: PathTargetKind;
+  value: string;
 };
+
+export type PackageScriptAnchorTarget = {
+  kind: "packageScript";
+  value: {
+    path: string;
+    script: string;
+  };
+};
+
+export type SymbolAnchorTarget = {
+  kind: "symbol";
+  value: {
+    path: string;
+    symbol: string;
+  };
+};
+
+export type CustomAnchorTarget = {
+  kind: string;
+  value: unknown;
+};
+
+export type AnchorTarget =
+  | PathAnchorTarget
+  | PackageScriptAnchorTarget
+  | SymbolAnchorTarget
+  | CustomAnchorTarget;
 
 export type Anchor = {
   target: AnchorTarget;

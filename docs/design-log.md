@@ -6,6 +6,18 @@ It is intentionally plain documentation. These entries are historical context,
 not nodes in the current-purpose graph. The `.ydk/` graph should stay focused on
 the current intended purpose of project artifacts.
 
+## 2026-04-21: Add a Target Resolver Abstraction
+
+The original anchor lookup code handled exact file paths and glob patterns
+inline inside `resolveWhy`. That worked for the first version, but it made it
+awkward to add more target kinds without spreading matching rules across the
+graph code.
+
+The resolver now handles concrete file, directory, and package script targets
+as well as file patterns. Exact file targets still win over broader matches, so
+the current CLI behavior stays stable while the implementation grows a more
+explicit target model.
+
 ## 2026-04-21: Add File Pattern Anchors
 
 While using `ydk` on `pit`, exact file anchors worked for source files but not
@@ -20,7 +32,7 @@ The fix was to support anchors with:
 ```yaml
 target:
   kind: filePattern
-  path: .pit/prompts/*.yaml
+  value: .pit/prompts/*.yaml
 ```
 
 This lets a project explain a class of artifacts without adding one anchor per

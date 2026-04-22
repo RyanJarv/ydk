@@ -1,3 +1,4 @@
+import { createTargetResolver, formatAnchorTarget } from "./targetResolver.js";
 import { traceToRoot } from "./trace.js";
 import type { GraphEdge, GraphNode, NodeId, YdkProject } from "./types.js";
 
@@ -58,6 +59,7 @@ function hasCycle(edges: GraphEdge[]): boolean {
 
 export function validateProject(project: YdkProject): ValidationResult {
   const errors: string[] = [];
+  const resolver = createTargetResolver(project);
   const nodes = new Map(project.graph.nodes.map((node) => [node.id, node]));
   const duplicateIds = findDuplicateIds(project.graph.nodes);
 
@@ -111,9 +113,11 @@ export function validateProject(project: YdkProject): ValidationResult {
 
   for (const anchor of project.anchors.anchors) {
     if (!nodes.has(anchor.node)) {
-      errors.push(`Anchor ${anchor.target.path} references unknown node: ${anchor.node}`);
+      errors.push(`Anchor ${formatAnchorTarget(anchor)} references unknown node: ${anchor.node}`);
     }
   }
+
+  errors.push(...resolver.validate());
 
   return {
     ok: errors.length === 0,

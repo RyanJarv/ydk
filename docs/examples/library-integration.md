@@ -20,7 +20,7 @@ export async function provideHover(documentPath: string) {
   }
 
   return renderHover({
-    title: result.anchor.target.path,
+    title: result.displayTarget,
     summary: result.anchor.reason,
     trace: result.trace.map((step) => ({
       id: step.node.id,
