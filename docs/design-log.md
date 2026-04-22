@@ -38,8 +38,13 @@ In practice, the useful workflow was:
 artifact -> current purpose -> mission
 ```
 
-The configurable ontology did not materially improve that loop, so it was
-removed from the default implementation.
+The configurable ontology did not materially improve that loop for the initial
+version, so it was removed from the default implementation to make `ydk` easier
+to understand and evaluate.
+
+This does not mean a configurable ontology is a bad idea. It may make sense to
+consider again after the simpler fixed model proves useful and the project has
+clear examples where custom node or edge types would solve a real problem.
 
 `ydk` now uses a fixed small model:
 
@@ -72,4 +77,3 @@ intended purpose.
 Historical rationale can still live in `docs/`, issues, pull requests, commits,
 or ADR-style documents. It should not be required in the `.ydk/` graph unless a
 future version has a clear need for it.
-
