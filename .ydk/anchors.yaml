@@ -15,6 +15,12 @@ anchors:
 
   - target:
       kind: file
+      path: docs/design-log.md
+    node: C-001
+    reason: Records historical design rationale outside the current-purpose graph.
+
+  - target:
+      kind: file
       path: src/cli.ts
     node: F-001
     reason: Provides the command interface for asking why an artifact exists.
