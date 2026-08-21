@@ -3,14 +3,15 @@ version: 1
 nodes:
   - id: M-001
     type: mission
-    title: Help maintainers understand why code exists
+    title: Keep project work aligned with its purpose
     statement: >
-      ydk exists so a maintainer can inspect meaningful project artifacts
-      and trace them back to the result the project was created to produce.
+      ydk exists so maintainers can understand why meaningful project artifacts
+      exist and keep code, features, and behavior aligned with the project's
+      intended purpose.
 
   - id: O-001
     type: outcome
-    title: Maintainers can answer why a feature exists
+    title: Maintainers can explain how current implementation supports project purpose
 
   - id: C-001
     type: capability

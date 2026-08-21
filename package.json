@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "An example why development kit repository that explains why its own code exists.",
+  "description": "A why development kit that connects project artifacts to their intended purpose.",
   "engines": {
     "node": ">=22.18.0"
   },

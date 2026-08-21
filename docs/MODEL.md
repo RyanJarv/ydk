@@ -13,9 +13,14 @@ validation rules used by `ydk`.
 - `mission`: the top-level reason the project exists.
 - `outcome`: an observable result that supports the mission.
 - `capability`: a durable ability the project needs in order to produce an outcome.
-- `feature`: a concrete behavior that provides or supports a capability.
+- `feature`: a concrete, repeatable product behavior that provides or supports a capability.
 
 Every project must have exactly one `mission` node.
+
+Nodes describe durable product purpose, not tasks, milestones, named onboarding
+runs, or other project-management state. Whether the implementation currently
+fulfills a node is a separate concern from whether that purpose belongs in the
+graph; `ydk` does not currently score that alignment.
 
 ## Built-In Edge Types
 

@@ -1,6 +1,6 @@
 # ydk
 
-`ydk` is a minimal example of a "why development kit": a repo-local purpose graph that can explain why meaningful artifacts exist.
+`ydk` is a minimal example of a "why development kit": a repo-local purpose graph that connects meaningful artifacts to their intended purpose.
 
 This repository dogfoods the idea. `ydk` has a small built-in model, and the `.ydk/` directory defines the graph and anchors that connect project intent to this repository's own files.
 
