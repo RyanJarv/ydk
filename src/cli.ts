@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 import { loadProject } from "./graph/loadProject.ts";
 import { resolveWhy } from "./graph/resolveWhy.ts";
-import { serveProject } from "./serve/server.ts";
+import {
+  DEFAULT_SERVE_HOST,
+  DEFAULT_SERVE_PORT,
+  serveProject,
+} from "./serve/server.ts";
 import { traceToRoot } from "./graph/trace.ts";
 import { validateProject } from "./graph/validateProject.ts";
+
+const HELP_ARGUMENTS = new Set(["--help", "-h", "help"]);
 
 function usage(): string {
   return [
@@ -13,7 +19,71 @@ function usage(): string {
     "  ydk validate",
     "  ydk graph",
     "  ydk serve [--host <host>] [--port <port>]",
+    "",
+    "Run `ydk <command> help` for command-specific help.",
+    "(`-h` and `--help` also work when preserved by the caller.)",
   ].join("\n");
+}
+
+function commandUsage(command: string): string | null {
+  const helpOption = "  -h, --help, help  Show command help";
+
+  switch (command) {
+    case "why":
+      return [
+        "Usage:",
+        "  ydk why <artifact-path>",
+        "",
+        "Explain why an artifact exists.",
+        "",
+        "Options:",
+        helpOption,
+      ].join("\n");
+    case "trace":
+      return [
+        "Usage:",
+        "  ydk trace <node-id>",
+        "",
+        "Trace a graph node to the project mission.",
+        "",
+        "Options:",
+        helpOption,
+      ].join("\n");
+    case "validate":
+      return [
+        "Usage:",
+        "  ydk validate",
+        "",
+        "Validate the project's YDK configuration.",
+        "",
+        "Options:",
+        helpOption,
+      ].join("\n");
+    case "graph":
+      return [
+        "Usage:",
+        "  ydk graph",
+        "",
+        "Print the project's purpose graph edges.",
+        "",
+        "Options:",
+        helpOption,
+      ].join("\n");
+    case "serve":
+      return [
+        "Usage:",
+        "  ydk serve [options]",
+        "",
+        "Start the local project explorer.",
+        "",
+        "Options:",
+        `  --host <host>  Host to bind (default: ${DEFAULT_SERVE_HOST})`,
+        `  --port <port>  Non-privileged port to bind (default: ${DEFAULT_SERVE_PORT})`,
+        helpOption,
+      ].join("\n");
+    default:
+      return null;
+  }
 }
 
 function formatTrace(trace: NonNullable<ReturnType<typeof traceToRoot>>): string {
@@ -29,11 +99,20 @@ function formatTrace(trace: NonNullable<ReturnType<typeof traceToRoot>>): string
 }
 
 async function main(): Promise<void> {
-  const [command, value] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const [command, value] = args;
 
-  if (command === "--help" || command === "-h") {
+  if (command && HELP_ARGUMENTS.has(command)) {
     console.log(usage());
     return;
+  }
+
+  if (command && args.slice(1).some((arg) => HELP_ARGUMENTS.has(arg))) {
+    const help = commandUsage(command);
+    if (help) {
+      console.log(help);
+      return;
+    }
   }
 
   if (command === "serve") {

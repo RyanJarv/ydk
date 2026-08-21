@@ -12,11 +12,14 @@ type ServeOptions = {
   root?: string;
 };
 
+export const DEFAULT_SERVE_HOST = "127.0.0.1";
+export const DEFAULT_SERVE_PORT = 4173;
+
 const serveDir = path.dirname(fileURLToPath(import.meta.url));
 
 export async function serveProject(options: ServeOptions = {}): Promise<void> {
-  const host = options.host ?? "127.0.0.1";
-  const port = options.port ?? 4173;
+  const host = options.host ?? DEFAULT_SERVE_HOST;
+  const port = options.port ?? DEFAULT_SERVE_PORT;
   const root = options.root ?? process.cwd();
 
   const server = createServer(async (request, response) => {

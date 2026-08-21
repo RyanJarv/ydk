@@ -89,6 +89,12 @@ anchors:
 
   - target:
       kind: file
+      value: src/launcher.ts
+    node: F-001
+    reason: Starts the CLI and confines the local web explorer to its required Node permissions.
+
+  - target:
+      kind: file
       value: src/graph/loadProject.ts
     node: C-001
     reason: Loads the repo-local purpose graph and anchors.

@@ -8,11 +8,11 @@
     "node": ">=22.18.0"
   },
   "bin": {
-    "ydk": "./src/cli.ts"
+    "ydk": "./src/launcher.ts"
   },
   "scripts": {
-    "ydk": "node src/cli.ts",
-    "serve": "node src/cli.ts serve",
+    "ydk": "node src/launcher.ts",
+    "serve": "node src/launcher.ts serve",
     "test": "node --test --test-isolation=none tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
