@@ -1,6 +1,6 @@
-import { createTargetResolver, formatAnchorTarget } from "../graph/targetResolver.js";
-import { traceToRoot } from "../graph/trace.js";
-import type { Anchor, GraphNode, NodeId, YdkProject } from "../graph/types.js";
+import { createTargetResolver, formatAnchorTarget } from "../graph/targetResolver.ts";
+import { traceToRoot } from "../graph/trace.ts";
+import type { Anchor, GraphNode, NodeId, YdkProject } from "../graph/types.ts";
 
 export type ProjectViewNode = GraphNode & {
   anchors: Array<{

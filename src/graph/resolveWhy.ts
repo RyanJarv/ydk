@@ -1,6 +1,6 @@
-import { createTargetResolver } from "./targetResolver.js";
-import { traceToRoot } from "./trace.js";
-import type { Anchor, TraceStep, YdkProject } from "./types.js";
+import { createTargetResolver } from "./targetResolver.ts";
+import { traceToRoot } from "./trace.ts";
+import type { Anchor, TraceStep, YdkProject } from "./types.ts";
 
 export type WhyResult = {
   anchor: Anchor;

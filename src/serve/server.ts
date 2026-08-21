@@ -2,9 +2,9 @@ import { createServer, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadProject } from "../graph/loadProject.js";
-import { validateProject } from "../graph/validateProject.js";
-import { createProjectView } from "./projectView.js";
+import { loadProject } from "../graph/loadProject.ts";
+import { validateProject } from "../graph/validateProject.ts";
+import { createProjectView } from "./projectView.ts";
 
 type ServeOptions = {
   host?: string;

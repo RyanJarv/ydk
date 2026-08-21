@@ -1,4 +1,4 @@
-import type { GraphConfig, GraphEdge, GraphNode, NodeId, TraceStep } from "./types.js";
+import type { GraphConfig, GraphEdge, GraphNode, NodeId, TraceStep } from "./types.ts";
 
 export function traceToRoot(graph: GraphConfig, startId: NodeId): TraceStep[] | null {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));

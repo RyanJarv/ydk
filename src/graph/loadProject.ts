@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
-import type { AnchorsConfig, GraphConfig, YdkProject } from "./types.js";
+import type { AnchorsConfig, GraphConfig, YdkProject } from "./types.ts";
 
 async function readYaml<T>(filePath: string): Promise<T> {
   const source = await readFile(filePath, "utf8");

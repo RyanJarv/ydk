@@ -1,6 +1,6 @@
-import { createTargetResolver, formatAnchorTarget } from "./targetResolver.js";
-import { traceToRoot } from "./trace.js";
-import type { GraphEdge, GraphNode, NodeId, YdkProject } from "./types.js";
+import { createTargetResolver, formatAnchorTarget } from "./targetResolver.ts";
+import { traceToRoot } from "./trace.ts";
+import type { GraphEdge, GraphNode, NodeId, YdkProject } from "./types.ts";
 
 export type ValidationResult = {
   ok: boolean;

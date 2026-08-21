@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "description": "An example why development kit repository that explains why its own code exists.",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "bin": {
     "ydk": "./src/cli.ts"
   },
   "scripts": {
-    "ydk": "tsx src/cli.ts",
-    "serve": "tsx src/cli.ts serve",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "ydk": "node src/cli.ts",
+    "serve": "node src/cli.ts serve",
+    "test": "node --test --test-isolation=none tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -19,7 +22,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.8.0"
   }
 }

@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadProject } from "../src/graph/loadProject.js";
-import { resolveWhy } from "../src/graph/resolveWhy.js";
-import { traceToRoot } from "../src/graph/trace.js";
-import { validateProject } from "../src/graph/validateProject.js";
+import { loadProject } from "../src/graph/loadProject.ts";
+import { resolveWhy } from "../src/graph/resolveWhy.ts";
+import { traceToRoot } from "../src/graph/trace.ts";
+import { validateProject } from "../src/graph/validateProject.ts";
 
 async function createTempProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ydk-target-resolver-"));

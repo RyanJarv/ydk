@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { loadProject } from "./graph/loadProject.js";
-import { resolveWhy } from "./graph/resolveWhy.js";
-import { serveProject } from "./serve/server.js";
-import { traceToRoot } from "./graph/trace.js";
-import { validateProject } from "./graph/validateProject.js";
+import { loadProject } from "./graph/loadProject.ts";
+import { resolveWhy } from "./graph/resolveWhy.ts";
+import { serveProject } from "./serve/server.ts";
+import { traceToRoot } from "./graph/trace.ts";
+import { validateProject } from "./graph/validateProject.ts";
 
 function usage(): string {
   return [
@@ -30,6 +30,11 @@ function formatTrace(trace: NonNullable<ReturnType<typeof traceToRoot>>): string
 
 async function main(): Promise<void> {
   const [command, value] = process.argv.slice(2);
+
+  if (command === "--help" || command === "-h") {
+    console.log(usage());
+    return;
+  }
 
   if (command === "serve") {
     await serveProject(parseServeOptions(process.argv.slice(3)));

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Anchor, YdkProject } from "./types.js";
+import type { Anchor, YdkProject } from "./types.ts";
 
 type TargetMatch = {
   anchor: Anchor;
