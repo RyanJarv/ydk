@@ -16,11 +16,37 @@ These concepts might make sense to merge, but it's unclear how.
 
 ```bash
 npm install
+npm run ydk -- graph
 npm run ydk -- why src/cli.ts
-npm run ydk -- trace F-001
+npm run ydk -- coverage
 npm run ydk -- validate
 npm run ydk -- serve
 ```
+
+`ydk graph` prints the purpose graph as a tree rooted at the mission, with a
+rollup of what sits beneath each node:
+
+```text
+M-001  Keep project work aligned with its purpose                                                               mission
+└── O-001  Maintainers can explain how current implementation supports project purpose  1 cap · 4 features · 24 anchors
+    └── C-001  Resolve implementation artifacts to project intent                               4 features · 23 anchors
+        ├── F-001  Explain why a repo artifact exists                                                         6 anchors
+        ├── F-002  Validate that the current purpose graph reaches the mission                                4 anchors
+        ├── F-003  Report how much of the repo is anchored to the purpose graph                                1 anchor
+        └── F-004  Visualize the purpose graph as a navigable map                                              1 anchor
+```
+
+`ydk coverage` reports how much of the project is connected to that graph:
+
+```text
+  nodes anchored   5 / 5   ██████████  100%
+  files anchored  29 / 35  ████████░░   83%
+  stale anchors    0
+```
+
+Add `--depth <n>` or `--flat` to `graph`, `--all-paths` to `why` and `trace`,
+and `--unanchored`, `--stale`, or `--dirs` to `coverage`. Every command that
+reads the graph also takes `--json`. Run `ydk <command> help` for the rest.
 
 ## Configuration
 
@@ -28,6 +54,7 @@ npm run ydk -- serve
 .ydk/
   graph.yaml    # defines this project's current purpose graph
   anchors.yaml  # maps repo artifacts to graph nodes
+  ignore        # optional: paths to leave out of coverage counts
 ```
 
 The important split is:
@@ -51,11 +78,23 @@ Given a repo artifact, return a valid explanation path from that artifact to the
 npm run ydk -- serve
 ```
 
-The explorer loads `.ydk/graph.yaml` and `.ydk/anchors.yaml`, shows the mission,
-outcomes, capabilities, and features, and lets you inspect the artifacts anchored
-to each purpose node.
+The explorer loads `.ydk/graph.yaml` and `.ydk/anchors.yaml` and splits them
+across three tabs. Each tab is a hash route, so any view is linkable:
 
-![ydk project explorer screenshot](./docs/assets/ydk-serve.png)
+- **Explorer** (`#/explorer`) — a collapsible outline of the graph with search
+  and filters, plus the why path, neighbors, and anchored artifacts of the
+  selected node. `#/explorer/F-001` opens straight to a node.
+- **Map** (`#/map`) — the graph as layered columns, one per node type. Selecting
+  a node highlights its path to the mission and dims everything off it.
+- **Coverage** (`#/coverage`) — the same numbers `ydk coverage` prints, as stat
+  tiles, a per-directory breakdown, and lists of unanchored nodes and stale
+  anchors.
+
+![ydk project explorer, Explorer view](./docs/assets/ydk-serve.png)
+
+![ydk project explorer, Map view](./docs/assets/ydk-serve-map.png)
+
+![ydk project explorer, Coverage view](./docs/assets/ydk-serve-coverage.png)
 
 ## Possible Direction Examples
 

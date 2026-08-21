@@ -58,12 +58,13 @@ These rules are built into `ydk`; they are not configured per repo.
 
 ## Per-Repo Configuration
 
-Each repo configures two files:
+Each repo configures two files, plus an optional third:
 
 ```text
 .ydk/
   graph.yaml
   anchors.yaml
+  ignore
 ```
 
 ### graph.yaml
@@ -186,6 +187,45 @@ anchors:
 Exact file anchors take precedence over directory and pattern anchors.
 Package script anchors resolve from `path#symbol` targets such as `package.json#build`.
 
+### ignore
+
+`.ydk/ignore` is optional. It lists paths that `ydk coverage` should leave out of
+its file counts: one `filePattern`-style glob per line, matched against
+repo-relative paths. Blank lines and lines starting with `#` are ignored.
+
+```text
+# editor and agent state, not repo artifacts
+.claude/**
+.idea/**
+```
+
+As in `filePattern` anchors, `*` matches within a single path segment and `**`
+crosses segments, so `*.log` matches only root-level logs while `**/*.log`
+matches them anywhere. The file only affects coverage counts; it does not change
+which anchors resolve or what `ydk validate` checks. `.git/`, `node_modules/`,
+and `.ydk/` are always skipped, whether or not this file exists.
+
+## Coverage
+
+`ydk coverage` measures two different things.
+
+Node coverage counts *anchorable* nodes: `capability` and `feature`. Those are
+the node types expected to point at something in the repo, so a `mission` or
+`outcome` without anchors is not counted as a gap. An anchorable node is
+anchored when at least one anchor names it.
+
+File coverage counts the files found by walking the repo, minus anything
+`.ydk/ignore` excludes. A file counts as anchored when any anchor target matches
+it: an exact `file` path, a `directory` the file sits under, a `filePattern` the
+file matches, or the `path` of a `packageScript`. Directory totals roll up from
+the files beneath them.
+
+An anchor is *stale* when its target no longer resolves — a missing file or
+directory, a package script that is gone from `scripts`, or a `filePattern` that
+now matches nothing. Stale anchors are reported separately from coverage because
+they mean the graph has drifted from the repo rather than that the repo is
+under-anchored.
+
 ## Browser Explorer
 
 `ydk serve` starts a local web server for browsing the current project graph:
@@ -198,6 +238,10 @@ The browser UI is intentionally project-focused. It uses the graph to show the
 project mission, the result and capability chain beneath it, and the artifacts
 anchored to each node. This makes the graph useful as a project map instead of
 only a raw node-edge diagram.
+
+It presents that graph three ways, each on its own hash route: an outline
+`#/explorer` for reading a node and its anchors, a layered `#/map` for seeing the
+shape of the graph, and `#/coverage` for the same report `ydk coverage` prints.
 
 ## What Was Removed
 

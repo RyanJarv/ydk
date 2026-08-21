@@ -1,0 +1,4 @@
+# Paths excluded from `ydk coverage` file counts.
+# One filePattern-style glob per line.
+.claude/**
+.idea/**

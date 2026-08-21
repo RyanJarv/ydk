@@ -1,38 +1,51 @@
-import { createTargetResolver, formatAnchorTarget } from "../graph/targetResolver.ts";
-import { traceToRoot } from "../graph/trace.ts";
+import {
+  computeAnchorStatus,
+  computeCoverage,
+  listProjectFiles,
+  type CoverageReport,
+} from "../graph/coverage.ts";
+import { formatAnchorTarget } from "../graph/targetResolver.ts";
+import { allTracesToRoot } from "../graph/trace.ts";
 import type { Anchor, GraphNode, NodeId, YdkProject } from "../graph/types.ts";
 
+export type ProjectViewAnchor = {
+  display: string;
+  kind: string;
+  reason: string;
+  matchCount?: number;
+  stale?: boolean;
+};
+
 export type ProjectViewNode = GraphNode & {
-  anchors: Array<{
-    display: string;
-    kind: string;
-    reason: string;
-  }>;
+  anchors: ProjectViewAnchor[];
   trace: string[];
+  traces: string[][];
 };
 
 export type ProjectView = {
   nodes: ProjectViewNode[];
   edges: YdkProject["graph"]["edges"];
-  anchors: Array<{
-    display: string;
-    kind: string;
-    node: NodeId;
-    nodeTitle: string;
-    reason: string;
-  }>;
+  anchors: Array<
+    ProjectViewAnchor & {
+      node: NodeId;
+      nodeTitle: string;
+    }
+  >;
   stats: {
     nodeCount: number;
     edgeCount: number;
     anchorCount: number;
+    anchorableNodeCount: number;
     anchoredNodeCount: number;
   };
+  coverage: CoverageReport;
 };
 
 export function createProjectView(project: YdkProject): ProjectView {
   const nodeById = new Map(project.graph.nodes.map((node) => [node.id, node]));
   const anchorsByNode = new Map<NodeId, Anchor[]>();
-  const targetResolver = createTargetResolver(project);
+  const files = listProjectFiles(project);
+  const coverage = computeCoverage(project, files);
 
   for (const anchor of project.anchors.anchors) {
     const anchors = anchorsByNode.get(anchor.node) ?? [];
@@ -40,25 +53,39 @@ export function createProjectView(project: YdkProject): ProjectView {
     anchorsByNode.set(anchor.node, anchors);
   }
 
+  const anchorViews = new Map<Anchor, ProjectViewAnchor>(
+    project.anchors.anchors.map((anchor) => {
+      const status = computeAnchorStatus(project, anchor, files);
+      return [
+        anchor,
+        {
+          display: formatAnchorTarget(anchor),
+          kind: anchor.target.kind,
+          reason: anchor.reason,
+          ...(status.matchCount === undefined ? {} : { matchCount: status.matchCount }),
+          stale: status.stale === true,
+        },
+      ];
+    }),
+  );
+
   const nodes = project.graph.nodes.map((node) => {
-    const trace = traceToRoot(project.graph, node.id) ?? [];
+    const traces = (allTracesToRoot(project.graph, node.id) ?? []).map((trace) =>
+      trace.map((step) => step.node.id),
+    );
+
     return {
       ...node,
-      anchors: (anchorsByNode.get(node.id) ?? []).map((anchor) => ({
-        display: formatAnchorTarget(anchor),
-        kind: anchor.target.kind,
-        reason: anchor.reason,
-      })),
-      trace: trace.map((step) => step.node.id),
+      anchors: (anchorsByNode.get(node.id) ?? []).map((anchor) => anchorView(anchorViews, anchor)),
+      trace: traces[0] ?? [],
+      traces,
     };
   });
 
   const anchors = project.anchors.anchors.map((anchor) => ({
-    display: formatAnchorTarget(anchor),
-    kind: anchor.target.kind,
+    ...anchorView(anchorViews, anchor),
     node: anchor.node,
     nodeTitle: nodeById.get(anchor.node)?.title ?? "Unknown node",
-    reason: anchor.reason,
   }));
 
   return {
@@ -69,7 +96,20 @@ export function createProjectView(project: YdkProject): ProjectView {
       nodeCount: project.graph.nodes.length,
       edgeCount: project.graph.edges.length,
       anchorCount: project.anchors.anchors.length,
-      anchoredNodeCount: anchorsByNode.size,
+      anchorableNodeCount: coverage.anchorableNodeCount,
+      anchoredNodeCount: coverage.anchoredNodeCount,
     },
+    coverage,
   };
+}
+
+function anchorView(anchorViews: Map<Anchor, ProjectViewAnchor>, anchor: Anchor): ProjectViewAnchor {
+  return (
+    anchorViews.get(anchor) ?? {
+      display: formatAnchorTarget(anchor),
+      kind: anchor.target.kind,
+      reason: anchor.reason,
+      stale: false,
+    }
+  );
 }

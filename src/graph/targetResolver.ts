@@ -200,6 +200,35 @@ export function formatAnchorTarget(anchor: Anchor): string {
   return resolver?.format(anchor) ?? `${anchor.target.kind}:${JSON.stringify(anchor.target.value)}`;
 }
 
+export function matchesFilePattern(filePath: string, pattern: string): boolean {
+  return matchesPattern(normalizeTarget(filePath), pattern);
+}
+
+export function anchorMatchesFile(anchor: Anchor, filePath: string): boolean {
+  const normalized = normalizeTarget(filePath);
+
+  switch (anchor.target.kind) {
+    case "file": {
+      const value = stringTargetValue(anchor);
+      return value !== null && normalizeTarget(value) === normalized;
+    }
+    case "filePattern": {
+      const value = stringTargetValue(anchor);
+      return value !== null && matchesPattern(normalized, value);
+    }
+    case "directory": {
+      const value = stringTargetValue(anchor);
+      return value !== null && matchesDirectory(normalized, value);
+    }
+    case "packageScript": {
+      const value = packageScriptTargetValue(anchor);
+      return value !== null && normalizeTarget(value.path) === normalized;
+    }
+    default:
+      return false;
+  }
+}
+
 function fileTargetDisplay(anchor: Anchor): string {
   return normalizeTarget(stringTargetValue(anchor) ?? "");
 }
@@ -221,11 +250,11 @@ function normalizeTarget(target: string): string {
   return target.replace(/\\/g, "/");
 }
 
-function stringTargetValue(anchor: Anchor): string | null {
+export function stringTargetValue(anchor: Anchor): string | null {
   return typeof anchor.target.value === "string" ? anchor.target.value : null;
 }
 
-function packageScriptTargetValue(anchor: Anchor): { path: string; script: string } | null {
+export function packageScriptTargetValue(anchor: Anchor): { path: string; script: string } | null {
   const value = anchor.target.value;
   if (
     value &&
@@ -315,7 +344,7 @@ function isDirectory(targetPath: string): boolean {
   return fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory();
 }
 
-function readPackageScripts(packageJsonPath: string): {
+export function readPackageScripts(packageJsonPath: string): {
   error?: string;
   scripts: Record<string, string>;
 } {

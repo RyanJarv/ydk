@@ -25,6 +25,14 @@ nodes:
     type: feature
     title: Validate that the current purpose graph reaches the mission
 
+  - id: F-003
+    type: feature
+    title: Report how much of the repo is anchored to the purpose graph
+
+  - id: F-004
+    type: feature
+    title: Visualize the purpose graph as a navigable map
+
 edges:
   - from: O-001
     to: M-001
@@ -39,5 +47,13 @@ edges:
     type: supports
 
   - from: F-002
+    to: C-001
+    type: supports
+
+  - from: F-003
+    to: C-001
+    type: supports
+
+  - from: F-004
     to: C-001
     type: supports

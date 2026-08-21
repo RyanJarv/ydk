@@ -130,6 +130,18 @@ anchors:
     reason: Checks that the graph and anchors are internally consistent.
 
   - target:
+      kind: file
+      value: src/graph/coverage.ts
+    node: F-003
+    reason: Measures how many purpose nodes and repo files are anchored, and finds anchors whose targets are gone.
+
+  - target:
+      kind: file
+      value: src/render.ts
+    node: F-004
+    reason: Draws the purpose graph, explanation paths, and coverage as terminal trees and meters.
+
+  - target:
       kind: filePattern
       value: src/serve/**
     node: F-001
