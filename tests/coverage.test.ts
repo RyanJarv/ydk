@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { computeCoverage, listProjectFiles } from "../src/graph/coverage.ts";
+import { computeAnchorStatus, computeCoverage, listProjectFiles } from "../src/graph/coverage.ts";
 import type { Anchor, YdkProject } from "../src/graph/types.ts";
 
 const packageJson = JSON.stringify(
@@ -148,6 +148,42 @@ test("flags anchors whose targets no longer exist", async () => {
     { display: "package.json#deploy", node: "F-001", reason: "package script not found" },
     { display: "tools/package.json#build", node: "F-001", reason: "package file not found" },
   ]);
+});
+
+test("anchors a node with a url without counting it toward file coverage", async () => {
+  const root = await createTempRoot({
+    "README.md": "# Temp project\n",
+    "src/cli.ts": "export {};\n",
+  });
+  const project = createProject(root, [
+    { target: { kind: "file", value: "README.md" }, node: "F-001", reason: "Introduces the project." },
+    { target: { kind: "url", value: "/#/map" }, node: "F-002", reason: "Presents the project map." },
+    { target: { kind: "url", value: "https://ydk.example/docs" }, node: "C-001", reason: "Hosts the guide." },
+  ]);
+
+  const coverage = computeCoverage(project);
+
+  assert.equal(coverage.anchoredNodeCount, 3);
+  assert.deepEqual(coverage.unanchoredNodes, []);
+  assert.equal(coverage.totalFiles, 2);
+  assert.equal(coverage.anchoredFiles, 1);
+  assert.deepEqual(coverage.staleAnchors, []);
+  assert.deepEqual(coverage.directories, [
+    { path: ".", totalFiles: 1, anchoredFiles: 1, children: [] },
+    { path: "src/", totalFiles: 1, anchoredFiles: 0, children: [] },
+  ]);
+});
+
+test("never reports a url anchor as stale", async () => {
+  const root = await createTempRoot({ "src/cli.ts": "export {};\n" });
+  const project = createProject(root, []);
+  const anchor: Anchor = {
+    target: { kind: "url", value: "/#/map" },
+    node: "F-002",
+    reason: "Presents the project map.",
+  };
+
+  assert.deepEqual(computeAnchorStatus(project, anchor, listProjectFiles(project)), {});
 });
 
 test("skips files matched by .ydk/ignore patterns", async () => {

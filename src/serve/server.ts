@@ -1,4 +1,4 @@
-import { createServer, type ServerResponse } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,7 @@ import { loadProject } from "../graph/loadProject.ts";
 import { validateProject } from "../graph/validateProject.ts";
 import { createProjectView } from "./projectView.ts";
 
-type ServeOptions = {
+export type ServeOptions = {
   host?: string;
   port?: number;
   root?: string;
@@ -16,13 +16,27 @@ export const DEFAULT_SERVE_HOST = "127.0.0.1";
 export const DEFAULT_SERVE_PORT = 4173;
 
 const serveDir = path.dirname(fileURLToPath(import.meta.url));
+const vueBrowserRuntimePath = fileURLToPath(import.meta.resolve("vue/dist/vue.esm-browser.prod.js"));
 
 export async function serveProject(options: ServeOptions = {}): Promise<void> {
   const host = options.host ?? DEFAULT_SERVE_HOST;
   const port = options.port ?? DEFAULT_SERVE_PORT;
+  const server = createProjectServer(options);
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, resolve);
+  });
+
+  console.log(`ydk project explorer running at http://${host}:${port}`);
+}
+
+export function createProjectServer(options: ServeOptions = {}): Server {
+  const host = options.host ?? DEFAULT_SERVE_HOST;
+  const port = options.port ?? DEFAULT_SERVE_PORT;
   const root = options.root ?? process.cwd();
 
-  const server = createServer(async (request, response) => {
+  return createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${host}:${port}`);
 
@@ -50,7 +64,7 @@ export async function serveProject(options: ServeOptions = {}): Promise<void> {
       if (url.pathname === "/vendor/vue.esm-browser.prod.js") {
         await sendFile(
           response,
-          path.join(root, "node_modules", "vue", "dist", "vue.esm-browser.prod.js"),
+          vueBrowserRuntimePath,
           "text/javascript; charset=utf-8",
         );
         return;
@@ -72,13 +86,6 @@ export async function serveProject(options: ServeOptions = {}): Promise<void> {
       response.end(error instanceof Error ? error.message : String(error));
     }
   });
-
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, resolve);
-  });
-
-  console.log(`ydk project explorer running at http://${host}:${port}`);
 }
 
 async function sendFile(response: ServerResponse, filePath: string, contentType: string): Promise<void> {

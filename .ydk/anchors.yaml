@@ -50,6 +50,12 @@ anchors:
     reason: Explores possible ways the purpose graph could be used by people and tools.
 
   - target:
+      kind: directory
+      value: docs/onboarding
+    node: C-002
+    reason: Records real-repository evaluations of how trustworthy and useful the purpose mapping is in practice.
+
+  - target:
       kind: packageScript
       value:
         path: package.json
@@ -144,11 +150,29 @@ anchors:
   - target:
       kind: filePattern
       value: src/serve/**
-    node: F-001
-    reason: Provides the local web explorer used to browse the project purpose map.
+    node: C-003
+    reason: Provides the local web app that makes the purpose graph comprehensible.
 
   - target:
       kind: filePattern
       value: tests/*.test.ts
     node: F-002
     reason: Exercises the current graph, target resolver, and validation behavior.
+
+  - target:
+      kind: url
+      value: /#/explorer
+    node: F-001
+    reason: Explorer page where a maintainer resolves nodes and artifacts to their why.
+
+  - target:
+      kind: url
+      value: /#/map
+    node: F-004
+    reason: Map page that shows the whole purpose graph as one navigable picture.
+
+  - target:
+      kind: url
+      value: /#/coverage
+    node: F-003
+    reason: Coverage page reporting how completely the repo maps to the purpose graph.

@@ -1,0 +1,158 @@
+version: 1
+
+anchors:
+  - target:
+      kind: file
+      value: AGENTS.md
+    node: M-001
+    reason: States the durable project direction and the conditions under which the pipeline is correct.
+
+  - target:
+      kind: file
+      value: README.md
+    node: O-001
+    reason: Introduces the operator questions the attack-surface map is intended to answer.
+
+  - target:
+      kind: file
+      value: docs/STRATEGY.md
+    node: O-001
+    reason: Defines the hunting use cases and the goal of surfacing work for human review.
+
+  - target:
+      kind: file
+      value: docs/design/invariants.md
+    node: O-002
+    reason: Defines the safety, evidence, replay, policy, runtime, and change-shape properties the project must preserve.
+
+  - target:
+      kind: file
+      value: docs/work-policy.md
+    node: C-001
+    reason: Defines how scope, program policy, and safety facts authorize runnable work.
+
+  - target:
+      kind: directory
+      value: step/programs
+    node: F-001
+    reason: Implements provider, program, scope, and policy ingestion as configured steps.
+
+  - target:
+      kind: file
+      value: docs/schema/data-lifecycle.md
+    node: C-002
+    reason: Defines how durable evidence is projected into current graph state and candidate work.
+
+  - target:
+      kind: directory
+      value: pkg/eventstore
+    node: C-002
+    reason: Provides append-only local evidence storage and reading.
+
+  - target:
+      kind: directory
+      value: pkg/records
+    node: C-002
+    reason: Defines durable result records and the evidence-to-current-state projection boundary.
+
+  - target:
+      kind: directory
+      value: step/discovery
+    node: F-002
+    reason: Implements configured discovery of domains, DNS, ports, and related attack-surface observations.
+
+  - target:
+      kind: file
+      value: docs/queue-runtime.md
+    node: C-003
+    reason: Defines the durable queue, hydration, completion, retry, rate, and re-scan mechanics.
+
+  - target:
+      kind: file
+      value: step/registry.go
+    node: F-003
+    reason: Binds the configured step stories into the running system.
+
+  - target:
+      kind: file
+      value: step/topology.go
+    node: F-003
+    reason: Declares the concrete workflow edges between configured steps.
+
+  - target:
+      kind: directory
+      value: pkg/runner
+    node: F-003
+    reason: Executes configured step work through the shared runtime.
+
+  - target:
+      kind: directory
+      value: pkg/sources
+    node: F-003
+    reason: Supplies typed local, queued, and streaming work to configured steps.
+
+  - target:
+      kind: file
+      value: pkg/records/enqueue.go
+    node: F-003
+    reason: Delivers configured workflow edges through the durable queue.
+
+  - target:
+      kind: file
+      value: docs/plans/observation-pivot.md
+    node: C-004
+    reason: Defines comparison as holding subject dimensions fixed while varying request shape or route.
+
+  - target:
+      kind: directory
+      value: step/probe/http
+    node: F-004
+    reason: Implements the shared HTTP request and delivery behavior used by direct and CDN routes.
+
+  - target:
+      kind: filePattern
+      value: step/probe/cdn-*/**
+    node: F-004
+    reason: Configures the CDN delivery routes used for cross-route HTTP observations.
+
+  - target:
+      kind: directory
+      value: step/checks/origin-compare
+    node: F-004
+    reason: Compares retained candidate-origin and current-front observations without new network work.
+
+  - target:
+      kind: directory
+      value: step/checks/xff-spoof
+    node: F-004
+    reason: Records evidence-backed verdicts over matching requests sent through different delivery positions.
+
+  - target:
+      kind: file
+      value: cmd/bb/internal/webapp/routecompare.go
+    node: F-004
+    reason: Presents matching observations across routes without inventing a verdict.
+
+  - target:
+      kind: file
+      value: docs/plans/web-app.md
+    node: C-005
+    reason: Defines the operator-facing browsing and review model for the local web app.
+
+  - target:
+      kind: file
+      value: docs/plans/result-review.md
+    node: C-005
+    reason: Connects subjects, checks, routes, outcomes, coverage, and findings for human review.
+
+  - target:
+      kind: directory
+      value: cmd/bb/internal/webapp
+    node: F-005
+    reason: Implements the local read-only surface for browsing project state, evidence, comparisons, and results.
+
+  - target:
+      kind: filePattern
+      value: cmd/bb/view*.go
+    node: F-005
+    reason: Provides CLI views over the same operator-facing read models.

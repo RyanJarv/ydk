@@ -132,6 +132,122 @@ test("resolves a package script anchor", async () => {
   assert.equal(result.trace.at(-1)?.node.id, "M-001");
 });
 
+test("resolves a url anchor from every spelling of its route", async () => {
+  const project = await loadProject();
+  project.anchors.anchors = [
+    {
+      target: {
+        kind: "url",
+        value: "/#/map",
+      },
+      node: "F-002",
+      reason: "Presents the graph as a layered project map.",
+    },
+  ];
+
+  for (const query of ["/#/map", "#/map", "http://127.0.0.1:4173/#/map"]) {
+    const result = resolveWhy(project, query);
+
+    assert.ok(result, `expected ${query} to resolve`);
+    assert.equal(result.anchor.node, "F-002");
+    assert.equal(result.displayTarget, "/#/map");
+    assert.equal(result.trace.at(-1)?.node.id, "M-001");
+  }
+});
+
+test("does not resolve a url anchor from an unrelated route", async () => {
+  const project = await loadProject();
+  project.anchors.anchors = [
+    {
+      target: {
+        kind: "url",
+        value: "/#/map",
+      },
+      node: "F-002",
+      reason: "Presents the graph as a layered project map.",
+    },
+  ];
+
+  assert.equal(resolveWhy(project, "/#/coverage"), null);
+});
+
+test("validates url anchors for route syntax without touching disk", async () => {
+  const project = await loadProject();
+  const root = await createTempProject();
+  project.root = root;
+  project.graph = {
+    version: 1,
+    nodes: [
+      { id: "M-001", type: "mission", title: "Mission" },
+      { id: "F-001", type: "feature", title: "Feature" },
+    ],
+    edges: [{ from: "F-001", to: "M-001", type: "supports" }],
+  };
+  project.anchors.anchors = [
+    {
+      target: {
+        kind: "url",
+        value: "/#/map",
+      },
+      node: "F-001",
+      reason: "Root-relative route.",
+    },
+    {
+      target: {
+        kind: "url",
+        value: "https://ydk.example/docs",
+      },
+      node: "F-001",
+      reason: "Externally hosted surface.",
+    },
+    {
+      target: {
+        kind: "url",
+        value: "foo",
+      },
+      node: "F-001",
+      reason: "Neither a route nor a URL.",
+    },
+    {
+      target: {
+        kind: "url",
+        value: "",
+      },
+      node: "F-001",
+      reason: "Empty route.",
+    },
+    {
+      target: {
+        kind: "url",
+        value: "http://",
+      },
+      node: "F-001",
+      reason: "Malformed absolute URL.",
+    },
+    {
+      target: {
+        kind: "url",
+        value: "//ydk.example/docs",
+      },
+      node: "F-001",
+      reason: "Protocol-relative URL rather than a root-relative route.",
+    },
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.errors.filter((error) => error.includes("url target value")),
+    [
+      'Anchor foo has invalid url target value: "foo"',
+      'Anchor  has invalid url target value: ""',
+      'Anchor http:// has invalid url target value: "http://"',
+      'Anchor //ydk.example/docs has invalid url target value: "//ydk.example/docs"',
+    ],
+  );
+});
+
 test("validates that concrete anchors reference existing files, directories, and scripts", async () => {
   const project = await loadProject();
   const root = await createTempProject();
@@ -189,8 +305,20 @@ test("traces graph nodes to the configured root", async () => {
   const trace = traceToRoot(project.graph, "F-002");
 
   assert.ok(trace);
-  assert.deepEqual(
-    trace.map((step) => step.node.id),
-    ["F-002", "C-001", "O-001", "M-001"],
-  );
+  assert.equal(trace.at(0)?.node.id, "F-002");
+  assert.equal(trace.at(-1)?.node.id, "M-001");
+
+  // Asserted structurally so re-parenting a node in .ydk/graph.yaml is not a test failure.
+  for (const [index, step] of trace.entries()) {
+    if (index === 0) {
+      assert.equal(step.via, undefined);
+      continue;
+    }
+
+    assert.deepEqual(step.via, {
+      from: trace[index - 1]?.node.id,
+      to: step.node.id,
+      type: "supports",
+    });
+  }
 });

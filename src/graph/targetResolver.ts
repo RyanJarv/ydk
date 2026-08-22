@@ -56,6 +56,30 @@ const targetTypes: TargetTypeResolver[] = [
     format: fileTargetDisplay,
   },
   {
+    kind: "url",
+    match(_project, anchor, normalizedTarget) {
+      const value = stringTargetValue(anchor);
+      if (!value || normalizeUrlTarget(value) !== normalizeUrlTarget(normalizedTarget)) {
+        return null;
+      }
+
+      return {
+        anchor,
+        display: urlTargetDisplay(anchor),
+        specificity: 95,
+      };
+    },
+    validate(_project, anchor) {
+      const value = stringTargetValue(anchor);
+      return value && isUrlTargetValue(value)
+        ? []
+        : [
+            `Anchor ${formatAnchorTarget(anchor)} has invalid url target value: ${JSON.stringify(anchor.target.value)}`,
+          ];
+    },
+    format: urlTargetDisplay,
+  },
+  {
     kind: "packageScript",
     match(_project, anchor, normalizedTarget) {
       const value = packageScriptTargetValue(anchor);
@@ -224,6 +248,8 @@ export function anchorMatchesFile(anchor: Anchor, filePath: string): boolean {
       const value = packageScriptTargetValue(anchor);
       return value !== null && normalizeTarget(value.path) === normalized;
     }
+    case "url":
+      return false;
     default:
       return false;
   }
@@ -246,8 +272,48 @@ function packageScriptTargetDisplay(anchor: Anchor): string {
   return value ? `${normalizeTarget(value.path)}#${value.script}` : "";
 }
 
+function urlTargetDisplay(anchor: Anchor): string {
+  return stringTargetValue(anchor) ?? "";
+}
+
 function normalizeTarget(target: string): string {
   return target.replace(/\\/g, "/");
+}
+
+/** Reduces a url target to its root-relative route so the host is not part of the match. */
+function normalizeUrlTarget(target: string): string {
+  const absolute = parseHttpUrl(target);
+  if (absolute) {
+    return `${absolute.pathname}${absolute.search}${absolute.hash}`;
+  }
+
+  return target.startsWith("/") ? target : `/${target}`;
+}
+
+function isUrlTargetValue(value: string): boolean {
+  if (parseHttpUrl(value)) {
+    return true;
+  }
+
+  if (!value.startsWith("/")) {
+    return false;
+  }
+
+  try {
+    const base = new URL("http://ydk.invalid");
+    return new URL(value, base).origin === base.origin;
+  } catch {
+    return false;
+  }
+}
+
+function parseHttpUrl(value: string): URL | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 export function stringTargetValue(anchor: Anchor): string | null {

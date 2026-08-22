@@ -18,6 +18,8 @@ const COLUMN_LABELS = {
   feature: "Features",
 };
 const ANCHORABLE_TYPES = new Set(["capability", "feature"]);
+/** Anchor group key for url anchors; real directory keys are "." or end in "/". */
+const SURFACE_GROUP = "product-surfaces";
 const VIEWS = ["map", "explorer", "coverage"];
 const DEFAULT_VIEW = "explorer";
 const DEFAULT_TREE_DEPTH = 2;
@@ -205,12 +207,15 @@ function anchorDirectory(display) {
 function groupAnchorsByDirectory(anchors) {
   const groups = new Map();
   for (const anchor of anchors ?? []) {
-    const directory = anchorDirectory(anchor.display);
+    const directory = anchor.kind === "url" ? SURFACE_GROUP : anchorDirectory(anchor.display);
     const group = groups.get(directory) ?? { directory, anchors: [] };
     group.anchors.push(anchor);
     groups.set(directory, group);
   }
   return [...groups.values()].sort((left, right) => {
+    if (left.directory === SURFACE_GROUP || right.directory === SURFACE_GROUP) {
+      return left.directory === SURFACE_GROUP ? -1 : 1;
+    }
     if (right.anchors.length !== left.anchors.length) return right.anchors.length - left.anchors.length;
     return left.directory < right.directory ? -1 : 1;
   });
@@ -869,6 +874,7 @@ const App = {
     }
 
     function groupLabel(directory) {
+      if (directory === SURFACE_GROUP) return "Product surfaces";
       return directory === "." ? "(repository root)" : directory;
     }
 
@@ -1197,7 +1203,7 @@ const App = {
                     <h3>Anchored Artifacts</h3>
                     <span v-if="selectedNode.anchors.length" class="muted">
                       {{ selectedNode.anchors.length }} across {{ anchorGroups.length }}
-                      {{ anchorGroups.length === 1 ? 'directory' : 'directories' }}
+                      {{ anchorGroups.length === 1 ? 'group' : 'groups' }}
                     </span>
                   </div>
 
@@ -1211,7 +1217,8 @@ const App = {
                       <article v-for="anchor in group.anchors" :key="anchor.display" class="artifact">
                         <div>
                           <span class="kind">{{ anchor.kind }}</span>
-                          <strong>{{ anchor.display }}</strong>
+                          <strong v-if="anchor.kind === 'url'"><a :href="anchor.display">{{ anchor.display }}</a></strong>
+                          <strong v-else>{{ anchor.display }}</strong>
                           <span v-if="anchor.matchCount !== undefined" class="meta">matches {{ anchor.matchCount }} files</span>
                         </div>
                         <p>{{ anchor.reason }}</p>

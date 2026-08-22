@@ -53,6 +53,8 @@ This means feature `F-001` supports capability `C-001`.
 - Every anchor must reference an existing node.
 - Every concrete anchor target must exist on disk or in the relevant package script table.
 - Pattern anchors are matched structurally and do not need to exist as a single concrete path.
+- `url` anchors name a product surface rather than a repo artifact, so they are checked
+  for route syntax only and are never resolved against disk.
 
 These rules are built into `ydk`; they are not configured per repo.
 
@@ -120,7 +122,7 @@ Each target kind provides three pieces of behavior:
 - how specific the match is relative to broader targets
 - how validation checks whether the target still exists
 
-The initial target kinds are `file`, `filePattern`, `directory`, and `packageScript`.
+The target kinds are `file`, `filePattern`, `directory`, `packageScript`, and `url`.
 
 #### Anchor Target Kinds
 
@@ -130,6 +132,7 @@ The initial target kinds are `file`, `filePattern`, `directory`, and `packageScr
 | `filePattern` | string glob pattern | any path matched by the pattern | Pattern syntax is checked structurally by matching; no single concrete path must exist. |
 | `directory` | string directory path | the directory path or any path under it | `value` must exist and be a directory. |
 | `packageScript` | object with `path` and `script` | `package.json#test` | `path` must exist, be readable JSON, and contain `scripts[script]`. |
+| `url` | string route | `/#/map` or `http://127.0.0.1:4173/#/map` | `value` must be a root-relative route or a valid `http://` or `https://` URL. Nothing is checked on disk. |
 
 `target.value` intentionally changes shape by target kind. Path-like targets use
 a string. Targets that identify something inside another artifact use an object.
@@ -184,6 +187,24 @@ anchors:
     reason: Builds the repository before validation.
 ```
 
+Url anchor:
+
+```yaml
+anchors:
+  - target:
+      kind: url
+      value: /#/map
+    node: F-003
+    reason: Presents the graph as a layered project map.
+```
+
+A `url` anchor names a *product surface* — a route a user can visit — where the
+other kinds name implementation. Prefer a root-relative route such as `/#/map`,
+since the host and port a project is served on are a deployment detail rather
+than product purpose; an absolute `http://` or `https://` URL is allowed for a
+surface hosted somewhere else. Queries match either way, so `#/map`, `/#/map`,
+and `http://127.0.0.1:4173/#/map` all resolve the same anchor.
+
 Exact file anchors take precedence over directory and pattern anchors.
 Package script anchors resolve from `path#symbol` targets such as `package.json#build`.
 
@@ -220,11 +241,16 @@ it: an exact `file` path, a `directory` the file sits under, a `filePattern` the
 file matches, or the `path` of a `packageScript`. Directory totals roll up from
 the files beneath them.
 
+A `url` anchor anchors its node like any other anchor, so a node reached only by
+a product surface still counts as anchored. It names no file, so it is left out
+of file coverage entirely rather than counted as an unmatched target.
+
 An anchor is *stale* when its target no longer resolves — a missing file or
 directory, a package script that is gone from `scripts`, or a `filePattern` that
 now matches nothing. Stale anchors are reported separately from coverage because
 they mean the graph has drifted from the repo rather than that the repo is
-under-anchored.
+under-anchored. A `url` anchor is never stale: `ydk` cannot tell from the repo
+whether a route is still served.
 
 ## Browser Explorer
 

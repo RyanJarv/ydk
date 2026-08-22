@@ -33,20 +33,23 @@ npm run ydk -- serve
 rollup of what sits beneath each node:
 
 ```text
-M-001  Keep project work aligned with its purpose                                                               mission
-└── O-001  Maintainers can explain how current implementation supports project purpose  1 cap · 4 features · 24 anchors
-    └── C-001  Resolve implementation artifacts to project intent                               4 features · 23 anchors
-        ├── F-001  Explain why a repo artifact exists                                                         6 anchors
-        ├── F-002  Validate that the current purpose graph reaches the mission                                4 anchors
-        ├── F-003  Report how much of the repo is anchored to the purpose graph                                1 anchor
-        └── F-004  Visualize the purpose graph as a navigable map                                              1 anchor
+M-001  Keep project work aligned with its purpose                                                                mission
+├── O-001  Maintainers can explain how current implementation supports project purpose  2 caps · 2 features · 21 anchors
+│   ├── C-001  Resolve implementation artifacts to project intent                                 1 feature · 17 anchors
+│   │   └── F-001  Explain why a repo artifact exists                                                          6 anchors
+│   └── C-003  Make the purpose graph comprehensible                                               1 feature · 3 anchors
+│       └── F-004  Visualize the purpose graph as a navigable map                                              2 anchors
+└── O-002  Maintainers can trust the purpose graph reflects the current repo              1 cap · 2 features · 7 anchors
+    └── C-002  Keep the purpose mapping trustworthy and complete                                  2 features · 7 anchors
+        ├── F-002  Validate that the current purpose graph reaches the mission                                 4 anchors
+        └── F-003  Report how much of the repo is anchored to the purpose graph                                2 anchors
 ```
 
 `ydk coverage` reports how much of the project is connected to that graph:
 
 ```text
-  nodes anchored   5 / 5   ██████████  100%
-  files anchored  29 / 35  ████████░░   83%
+  nodes anchored   7 / 7   ██████████  100%
+  files anchored  33 / 39  █████████░   85%
   stale anchors    0
 ```
 
@@ -109,3 +112,11 @@ See [./docs/examples](./docs/examples/README.md).
 Those examples are exploratory. They include fictional or proposed commands,
 API shapes, and workflows to compare possible directions for `ydk`; they should
 not be read as current CLI behavior.
+
+## Onboarding Studies
+
+The [bb-private manual onboarding study](./docs/onboarding/bb-private.md) records
+how the current graph, anchors, validation, explanation, and coverage behavior
+worked against a large real repository. It includes the candidate configuration,
+reproducible results, unresolved artifacts, and product friction observed during
+the trial.

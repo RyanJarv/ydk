@@ -103,6 +103,8 @@ export function computeAnchorStatus(project: YdkProject, anchor: Anchor, files: 
         ? {}
         : { stale: true, reason: "package script not found" };
     }
+    case "url":
+      return {};
     default:
       return {};
   }

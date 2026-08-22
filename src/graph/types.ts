@@ -42,6 +42,11 @@ export type SymbolAnchorTarget = {
   };
 };
 
+export type UrlAnchorTarget = {
+  kind: "url";
+  value: string;
+};
+
 export type CustomAnchorTarget = {
   kind: string;
   value: unknown;
@@ -51,6 +56,7 @@ export type AnchorTarget =
   | PathAnchorTarget
   | PackageScriptAnchorTarget
   | SymbolAnchorTarget
+  | UrlAnchorTarget
   | CustomAnchorTarget;
 
 export type Anchor = {

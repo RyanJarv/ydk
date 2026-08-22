@@ -1,0 +1,106 @@
+version: 1
+
+nodes:
+  - id: M-001
+    type: mission
+    title: Help hunters find worthwhile bug-bounty targets through trustworthy evidence
+    statement: >
+      bb-private exists to support useful bug-bounty discovery through safe,
+      explicit, policy-aware recon whose evidence and results remain inspectable.
+
+  - id: O-001
+    type: outcome
+    title: Hunters can identify targets worth investigating
+
+  - id: O-002
+    type: outcome
+    title: Recon remains safe, explainable, replayable, and policy-aware
+
+  - id: C-001
+    type: capability
+    title: Maintain authorized program context
+
+  - id: C-002
+    type: capability
+    title: Preserve evidence and project current attack-surface state
+
+  - id: C-003
+    type: capability
+    title: Run durable policy-gated discovery
+
+  - id: C-004
+    type: capability
+    title: Produce trustworthy cross-route comparisons
+
+  - id: C-005
+    type: capability
+    title: Surface inspectable leads for human review
+
+  - id: F-001
+    type: feature
+    title: Ingest program scope and policy
+
+  - id: F-002
+    type: feature
+    title: Discover and record attack-surface observations
+
+  - id: F-003
+    type: feature
+    title: Queue, execute, complete, and replay bounded step work
+
+  - id: F-004
+    type: feature
+    title: Compare matching requests across delivery routes
+
+  - id: F-005
+    type: feature
+    title: Browse assets, work, evidence, and results
+
+edges:
+  - from: O-001
+    to: M-001
+    type: supports
+
+  - from: O-002
+    to: M-001
+    type: supports
+
+  - from: C-001
+    to: O-002
+    type: supports
+
+  - from: C-002
+    to: O-002
+    type: supports
+
+  - from: C-003
+    to: O-002
+    type: supports
+
+  - from: C-004
+    to: O-001
+    type: supports
+
+  - from: C-005
+    to: O-001
+    type: supports
+
+  - from: F-001
+    to: C-001
+    type: supports
+
+  - from: F-002
+    to: C-002
+    type: supports
+
+  - from: F-003
+    to: C-003
+    type: supports
+
+  - from: F-004
+    to: C-004
+    type: supports
+
+  - from: F-005
+    to: C-005
+    type: supports

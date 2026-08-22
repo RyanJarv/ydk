@@ -13,9 +13,21 @@ nodes:
     type: outcome
     title: Maintainers can explain how current implementation supports project purpose
 
+  - id: O-002
+    type: outcome
+    title: Maintainers can trust the purpose graph reflects the current repo
+
   - id: C-001
     type: capability
     title: Resolve implementation artifacts to project intent
+
+  - id: C-002
+    type: capability
+    title: Keep the purpose mapping trustworthy and complete
+
+  - id: C-003
+    type: capability
+    title: Make the purpose graph comprehensible
 
   - id: F-001
     type: feature
@@ -38,7 +50,19 @@ edges:
     to: M-001
     type: supports
 
+  - from: O-002
+    to: M-001
+    type: supports
+
   - from: C-001
+    to: O-001
+    type: supports
+
+  - from: C-002
+    to: O-002
+    type: supports
+
+  - from: C-003
     to: O-001
     type: supports
 
@@ -47,13 +71,13 @@ edges:
     type: supports
 
   - from: F-002
-    to: C-001
+    to: C-002
     type: supports
 
   - from: F-003
-    to: C-001
+    to: C-002
     type: supports
 
   - from: F-004
-    to: C-001
+    to: C-003
     type: supports
