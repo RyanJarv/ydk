@@ -6,8 +6,9 @@ nodes:
     title: Keep project work aligned with its purpose
     statement: >
       ydk exists so maintainers can understand why meaningful project artifacts
-      exist and keep code, features, and behavior aligned with the project's
-      intended purpose.
+      exist and can treat the purpose graph as the desired state of the
+      project: code, features, and behavior track the graph, and drift between
+      implementation and purpose is made visible and actionable.
 
   - id: O-001
     type: outcome
@@ -16,6 +17,10 @@ nodes:
   - id: O-002
     type: outcome
     title: Maintainers can trust the purpose graph reflects the current repo
+
+  - id: O-003
+    type: outcome
+    title: Maintainers can steer implementation by changing the graph
 
   - id: C-001
     type: capability
@@ -28,6 +33,14 @@ nodes:
   - id: C-003
     type: capability
     title: Make the purpose graph comprehensible
+
+  - id: C-004
+    type: capability
+    title: Measure how well implementation fulfills each node's stated purpose
+
+  - id: C-005
+    type: capability
+    title: Measure how coherently each node supports its parent
 
   - id: F-001
     type: feature
@@ -64,6 +77,18 @@ edges:
 
   - from: C-003
     to: O-001
+    type: supports
+
+  - from: O-003
+    to: M-001
+    type: supports
+
+  - from: C-004
+    to: O-003
+    type: supports
+
+  - from: C-005
+    to: O-003
     type: supports
 
   - from: F-001
