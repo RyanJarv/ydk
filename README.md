@@ -14,6 +14,8 @@ These concepts might make sense to merge, but it's unclear how.
 
 Really this is just an experiment... I'm not actually sure this really makes sense. I think you could probably think of it as effectively comments/documentation in graph form. My hope is that doing this helps expose inconsistencies that come about from generating large amounts of code. LLMs seem to be very good at making the right decision when they have the right information, but they rarely seem to have the right information...
 
+Also... LLMs seem to make all kinds of weird justifications for things when you're not careful to audit the reasoning behind everything. This get's super tiring, I think a tree graph could potentially make this easier, you have your mission statements on the left, just a couple sentences which serve as justification for everything in the project. Something like that.. 
+
 ## Try it
 
 ```bash
