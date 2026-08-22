@@ -16,6 +16,8 @@ Really this is just an experiment... I'm not actually sure this really makes sen
 
 Also... LLMs seem to make all kinds of weird justifications for things when you're not careful to audit the reasoning behind everything. This get's super tiring, I think a tree graph could potentially make this easier, you have your mission statements on the left, just a couple sentences which serve as justification for everything in the project. Something like that.. 
 
+I think it makes sense to tie this into comments so far, ideally this would exist as comments tbh. I don't really like that it's some custom format that get's stuck in a dot folder.
+
 ## Try it
 
 ```bash
