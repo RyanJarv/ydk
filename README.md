@@ -12,6 +12,8 @@ If your question is how? Take a look at [pit](https://github.com/RyanJarv/pit).
 
 These concepts might make sense to merge, but it's unclear how.
 
+Really this is just an experiment... I'm not actually sure this really makes sense. I think you could probably think of it as effectively comments/documentation in graph form. My hope is that doing this helps expose inconsistencies that come about from generating large amounts of code. LLMs seem to be very good at making the right decision when they have the right information, but they rarely seem to have the right information...
+
 ## Try it
 
 ```bash
