@@ -65,6 +65,17 @@ const coverageReport: CoverageReport = {
     { display: "src/legacy.ts", node: "F-002", reason: "file not found" },
     { display: "docs/*.mdx", node: "C-001", reason: "pattern matches no files" },
   ],
+  assessedNodes: [],
+  averageScore: null,
+};
+
+const assessedReport: CoverageReport = {
+  ...coverageReport,
+  assessedNodes: [
+    { id: "C-001", type: "capability", title: "Verify deployment provenance", score: 3, assessed: "2026-08-23" },
+    { id: "F-001", type: "feature", title: "Export an audit bundle", score: 2, assessed: "2026-08-20" },
+  ],
+  averageScore: 2.5,
 };
 
 const plain = { color: false, width: 60 };
@@ -218,6 +229,32 @@ test("drops the unanchored section and the stale pointer when there is nothing t
   );
 });
 
+test("adds the assessed summary row and node scores when the project has assessments", () => {
+  assert.equal(
+    renderCoverage(assessedReport, plain),
+    [
+      "  nodes anchored   32 / 37   █████████░   86%",
+      "  files anchored  167 / 256  ███████░░░   65%",
+      "  stale anchors     2        ydk coverage --stale to list",
+      "  nodes assessed    2 / 37   █░░░░░░░░░    5%  avg score 2.5",
+      "",
+      "  unanchored nodes",
+      "    F-010  Preview downstream service effects",
+      "    F-016  Diff signed manifests offline",
+      "    F-022  Replay drift alerts against change intent",
+      "    +2 more · ydk coverage --unanchored",
+      "",
+      "  assessed nodes",
+      "    C-001  Verify deployment provenance  score 3/4",
+      "    F-001  Export an audit bundle        score 2/4",
+    ].join("\n"),
+  );
+});
+
+test("leaves the coverage report unchanged when nothing has been assessed", () => {
+  assert.ok(!renderCoverage(coverageReport, plain).includes("assessed"));
+});
+
 test("rounds the meter to the nearest of ten cells", () => {
   assert.equal(renderMeter(100, plain), "██████████");
   assert.equal(renderMeter(86, plain), "█████████░");
@@ -269,8 +306,11 @@ test("emits ANSI escapes only when color is enabled", () => {
     /\u001B\[/u,
   );
 
+  assert.match(renderCoverage(assessedReport, colored), /\u001B\[/u);
+
   assert.doesNotMatch(renderGraphTree(multiParentGraph, anchors, plain), /\u001B\[/u);
   assert.doesNotMatch(renderCoverage(coverageReport, plain), /\u001B\[/u);
+  assert.doesNotMatch(renderCoverage(assessedReport, plain), /\u001B\[/u);
   assert.doesNotMatch(
     renderTraceSection(tracesFor("F-001"), { ...plain, hintCommand: "ydk trace F-001" }),
     /\u001B\[/u,

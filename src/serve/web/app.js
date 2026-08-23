@@ -23,6 +23,9 @@ const SURFACE_GROUP = "product-surfaces";
 const VIEWS = ["map", "explorer", "coverage"];
 const DEFAULT_VIEW = "explorer";
 const DEFAULT_TREE_DEPTH = 2;
+const MAX_SCORE = 4;
+/** Below this a node's anchored artifacts do not yet fulfill what it claims. */
+const SCORE_WARNING_LEVEL = 3;
 
 const NODE_SIZES = {
   mission: { width: 270, height: 100 },
@@ -55,6 +58,14 @@ function meterTone(value) {
   if (value === 0) return "none";
   if (value < 70) return "low";
   return "good";
+}
+
+function scoreLabel(score) {
+  return "score " + score + "/" + MAX_SCORE;
+}
+
+function scoreTone(score) {
+  return { warn: score < SCORE_WARNING_LEVEL };
 }
 
 function compareNodes(left, right) {
@@ -656,6 +667,8 @@ const App = {
           anchoredFiles: 0,
           directories: [],
           staleAnchors: [],
+          assessedNodes: [],
+          averageScore: null,
         },
     );
 
@@ -847,6 +860,8 @@ const App = {
       (parents.value.get(selectedId.value) ?? []).map((id) => nodeById.value.get(id)).filter(Boolean),
     );
 
+    const selectedAssessment = computed(() => selectedNode.value?.assessment ?? null);
+
     const staleReasons = computed(() => {
       const map = new Map();
       for (const stale of coverage.value.staleAnchors ?? []) {
@@ -971,6 +986,18 @@ const App = {
       ratio: percent(coverage.value.anchoredFiles, coverage.value.totalFiles),
     }));
 
+    const assessedNodes = computed(() => coverage.value.assessedNodes ?? []);
+
+    const assessmentSummary = computed(() => {
+      if (!assessedNodes.value.length) return null;
+      const average = coverage.value.averageScore;
+      return {
+        assessed: assessedNodes.value.length,
+        total: coverage.value.anchorableNodeCount,
+        average: average === null || average === undefined ? null : average.toFixed(1),
+      };
+    });
+
     /* -------------------------------------------------------------- load */
 
     onMounted(async () => {
@@ -997,6 +1024,8 @@ const App = {
       anchorGroups,
       anchorKinds,
       anchoredPercent,
+      assessedNodes,
+      assessmentSummary,
       clearFocus,
       coverage,
       error,
@@ -1016,8 +1045,11 @@ const App = {
       outlineEmpty,
       primaryTrace,
       project,
+      scoreLabel,
+      scoreTone,
       search,
       selectNode,
+      selectedAssessment,
       selectedChildren,
       selectedId,
       selectedNode,
@@ -1128,7 +1160,17 @@ const App = {
                     <p class="eyebrow">{{ selectedNode.type }}</p>
                     <h2>{{ selectedNode.title }}</h2>
                   </div>
-                  <span class="node-pill">{{ selectedNode.id }}</span>
+                  <div class="detail-badges">
+                    <span
+                      v-if="selectedAssessment"
+                      class="badge"
+                      :class="scoreTone(selectedAssessment.score)"
+                      :title="'Assessed ' + selectedAssessment.assessed"
+                    >
+                      {{ scoreLabel(selectedAssessment.score) }}
+                    </span>
+                    <span class="node-pill">{{ selectedNode.id }}</span>
+                  </div>
                 </div>
 
                 <p v-if="selectedNode.statement" class="statement">{{ selectedNode.statement }}</p>
@@ -1229,6 +1271,33 @@ const App = {
 
                   <p v-if="!selectedNode.anchors.length" class="muted">No artifacts anchor directly to this node.</p>
                 </section>
+
+                <section v-if="selectedAssessment" class="assessment">
+                  <div class="section-head">
+                    <h3>Assessment</h3>
+                    <span class="badge" :class="scoreTone(selectedAssessment.score)">
+                      {{ scoreLabel(selectedAssessment.score) }}
+                    </span>
+                    <span class="muted">assessed {{ selectedAssessment.assessed }}</span>
+                  </div>
+                  <p class="muted">
+                    How well the artifacts above fulfill what this node claims. Judged on direct anchors only.
+                  </p>
+
+                  <div v-if="selectedAssessment.unfulfilled.length">
+                    <h4>Claimed but not delivered</h4>
+                    <ul class="finding-list">
+                      <li v-for="finding in selectedAssessment.unfulfilled" :key="finding">{{ finding }}</li>
+                    </ul>
+                  </div>
+
+                  <div v-if="selectedAssessment.undeclared.length">
+                    <h4>Delivered but not claimed</h4>
+                    <ul class="finding-list">
+                      <li v-for="finding in selectedAssessment.undeclared" :key="finding">{{ finding }}</li>
+                    </ul>
+                  </div>
+                </section>
               </section>
             </section>
 
@@ -1323,6 +1392,28 @@ const App = {
                     </button>
                   </template>
                   <p v-else class="muted">Every capability and feature has at least one anchor.</p>
+                </div>
+
+                <div v-if="assessmentSummary" class="card">
+                  <div class="section-head">
+                    <h3>Assessed purpose nodes</h3>
+                    <span class="badge">{{ assessmentSummary.assessed }}</span>
+                  </div>
+                  <p class="muted">
+                    assessed {{ assessmentSummary.assessed }} / {{ assessmentSummary.total }} anchorable nodes<template
+                      v-if="assessmentSummary.average"> &middot; avg score {{ assessmentSummary.average }}</template>
+                  </p>
+                  <button
+                    v-for="node in assessedNodes"
+                    :key="node.id"
+                    type="button"
+                    class="list-row"
+                    @click="openInExplorer(node.id)"
+                  >
+                    <span class="node-id">{{ node.id }}</span>
+                    <span class="list-title">{{ node.title }}</span>
+                    <span class="badge" :class="scoreTone(node.score)">{{ scoreLabel(node.score) }}</span>
+                  </button>
                 </div>
 
                 <div class="card">

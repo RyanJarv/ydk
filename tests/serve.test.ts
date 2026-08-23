@@ -62,6 +62,7 @@ test("presents a url anchor as a live product surface", async () => {
         },
       ],
     },
+    assessments: { version: 1, assessments: [] },
   };
 
   const view = createProjectView(project);
@@ -76,4 +77,58 @@ test("presents a url anchor as a live product surface", async () => {
   ]);
   assert.equal(view.stats.anchoredNodeCount, 1);
   assert.deepEqual(view.coverage.staleAnchors, []);
+});
+
+test("exposes an assessment on the node it judges", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ydk-assessment-view-"));
+  const project: YdkProject = {
+    root,
+    graph: {
+      version: 1,
+      nodes: [
+        { id: "M-001", type: "mission", title: "Mission" },
+        { id: "F-001", type: "feature", title: "Feature" },
+        { id: "F-002", type: "feature", title: "Unassessed feature" },
+      ],
+      edges: [
+        { from: "F-001", to: "M-001", type: "supports" },
+        { from: "F-002", to: "M-001", type: "supports" },
+      ],
+    },
+    anchors: {
+      version: 1,
+      anchors: [
+        {
+          target: { kind: "url", value: "/#/map" },
+          node: "F-001",
+          reason: "Presents the project map.",
+        },
+      ],
+    },
+    assessments: {
+      version: 1,
+      assessments: [
+        {
+          node: "F-001",
+          score: 2,
+          assessed: "2026-08-23",
+          unfulfilled: ["The map cannot be filtered."],
+        },
+      ],
+    },
+  };
+
+  const view = createProjectView(project);
+
+  assert.deepEqual(view.nodes.find((node) => node.id === "F-001")?.assessment, {
+    score: 2,
+    assessed: "2026-08-23",
+    unfulfilled: ["The map cannot be filtered."],
+    undeclared: [],
+  });
+  assert.equal(view.nodes.find((node) => node.id === "F-002")?.assessment, undefined);
+  assert.deepEqual(view.coverage.assessedNodes, [
+    { id: "F-001", type: "feature", title: "Feature", score: 2, assessed: "2026-08-23" },
+  ]);
+  assert.equal(view.coverage.averageScore, 2);
 });

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { computeAnchorStatus, computeCoverage, listProjectFiles } from "../src/graph/coverage.ts";
-import type { Anchor, YdkProject } from "../src/graph/types.ts";
+import type { Anchor, Assessment, YdkProject } from "../src/graph/types.ts";
 
 const packageJson = JSON.stringify(
   {
@@ -30,7 +30,7 @@ async function createTempRoot(files: Record<string, string>): Promise<string> {
   return root;
 }
 
-function createProject(root: string, anchors: Anchor[]): YdkProject {
+function createProject(root: string, anchors: Anchor[], assessments: Assessment[] = []): YdkProject {
   return {
     root,
     graph: {
@@ -52,6 +52,10 @@ function createProject(root: string, anchors: Anchor[]): YdkProject {
     anchors: {
       version: 1,
       anchors,
+    },
+    assessments: {
+      version: 1,
+      assessments,
     },
   };
 }
@@ -224,6 +228,41 @@ test("counts a file matched by several anchors once", async () => {
 
   assert.equal(coverage.totalFiles, 1);
   assert.equal(coverage.anchoredFiles, 1);
+});
+
+test("reports assessed nodes in graph order with their average score", async () => {
+  const root = await createTempRoot({ "src/cli.ts": "export {};\n" });
+  const project = createProject(
+    root,
+    [{ target: { kind: "file", value: "src/cli.ts" }, node: "F-001", reason: "Runs the CLI." }],
+    [
+      { node: "F-001", score: 2, assessed: "2026-08-23", unfulfilled: ["No JSON output."] },
+      { node: "C-001", score: 3, assessed: "2026-08-20" },
+    ],
+  );
+
+  const coverage = computeCoverage(project);
+
+  assert.deepEqual(coverage.assessedNodes, [
+    { id: "C-001", type: "capability", title: "Capability", score: 3, assessed: "2026-08-20" },
+    { id: "F-001", type: "feature", title: "First feature", score: 2, assessed: "2026-08-23" },
+  ]);
+  assert.equal(coverage.averageScore, 2.5);
+});
+
+test("reports no assessed nodes when the project has no assessments", async () => {
+  const root = await createTempRoot({ "src/cli.ts": "export {};\n" });
+  const coverage = computeCoverage(createProject(root, []));
+
+  assert.deepEqual(coverage.assessedNodes, []);
+  assert.equal(coverage.averageScore, null);
+});
+
+test("leaves an assessment of an unknown node out of the coverage report", async () => {
+  const root = await createTempRoot({ "src/cli.ts": "export {};\n" });
+  const project = createProject(root, [], [{ node: "F-404", score: 4, assessed: "2026-08-23" }]);
+
+  assert.deepEqual(computeCoverage(project).assessedNodes, []);
 });
 
 test("excludes .git, node_modules, and .ydk from the file walk", async () => {

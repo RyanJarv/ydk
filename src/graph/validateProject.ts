@@ -1,3 +1,4 @@
+import { ANCHORABLE_NODE_TYPES } from "./coverage.ts";
 import { createTargetResolver, formatAnchorTarget } from "./targetResolver.ts";
 import { traceToRoot } from "./trace.ts";
 import type { GraphEdge, GraphNode, NodeId, YdkProject } from "./types.ts";
@@ -9,6 +10,9 @@ export type ValidationResult = {
 
 const ALLOWED_NODE_TYPES = new Set(["mission", "outcome", "capability", "feature"]);
 const ALLOWED_EDGE_TYPES = new Set(["supports"]);
+const MIN_SCORE = 0;
+const MAX_SCORE = 4;
+const ASSESSED_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 function findDuplicateIds(nodes: GraphNode[]): NodeId[] {
   const seen = new Set<NodeId>();
@@ -22,6 +26,20 @@ function findDuplicateIds(nodes: GraphNode[]): NodeId[] {
   }
 
   return [...duplicates];
+}
+
+function isValidScore(score: unknown): boolean {
+  return typeof score === "number" && Number.isInteger(score) && score >= MIN_SCORE && score <= MAX_SCORE;
+}
+
+function isValidAssessedDate(assessed: unknown): boolean {
+  if (typeof assessed !== "string" || !ASSESSED_DATE_PATTERN.test(assessed)) {
+    return false;
+  }
+
+  // A well-shaped date can still name no real day, which Date rolls over rather than rejects.
+  const parsed = Date.parse(assessed);
+  return !Number.isNaN(parsed) && new Date(parsed).toISOString().startsWith(assessed);
 }
 
 function hasCycle(edges: GraphEdge[]): boolean {
@@ -115,6 +133,32 @@ export function validateProject(project: YdkProject): ValidationResult {
     if (!nodes.has(anchor.node)) {
       errors.push(`Anchor ${formatAnchorTarget(anchor)} references unknown node: ${anchor.node}`);
     }
+  }
+
+  const assessedNodes = new Set<NodeId>();
+  for (const assessment of project.assessments.assessments) {
+    const node = nodes.get(assessment.node);
+
+    if (!node) {
+      errors.push(`Assessment references unknown node: ${assessment.node}`);
+    } else if (!ANCHORABLE_NODE_TYPES.has(node.type)) {
+      errors.push(`Assessment ${assessment.node} uses non-anchorable node type: ${node.type}`);
+    }
+
+    if (!isValidScore(assessment.score)) {
+      errors.push(`Assessment ${assessment.node} has invalid score: ${JSON.stringify(assessment.score)}`);
+    }
+
+    if (!isValidAssessedDate(assessment.assessed)) {
+      errors.push(
+        `Assessment ${assessment.node} has invalid assessed date: ${JSON.stringify(assessment.assessed)}`,
+      );
+    }
+
+    if (assessedNodes.has(assessment.node)) {
+      errors.push(`Duplicate assessment for node: ${assessment.node}`);
+    }
+    assessedNodes.add(assessment.node);
   }
 
   errors.push(...resolver.validate());

@@ -70,10 +70,24 @@ export type AnchorsConfig = {
   anchors: Anchor[];
 };
 
+export type Assessment = {
+  node: NodeId;
+  score: number;
+  assessed: string;
+  unfulfilled?: string[];
+  undeclared?: string[];
+};
+
+export type AssessmentsConfig = {
+  version: number;
+  assessments: Assessment[];
+};
+
 export type YdkProject = {
   root: string;
   graph: GraphConfig;
   anchors: AnchorsConfig;
+  assessments: AssessmentsConfig;
 };
 
 export type TraceStep = {

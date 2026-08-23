@@ -20,7 +20,8 @@ Every project must have exactly one `mission` node.
 Nodes describe durable product purpose, not tasks, milestones, named onboarding
 runs, or other project-management state. Whether the implementation currently
 fulfills a node is a separate concern from whether that purpose belongs in the
-graph; `ydk` does not currently score that alignment.
+graph, so that judgment is recorded outside the node, in `.ydk/assessments.yaml`.
+See [Assessments](#assessments).
 
 ## Built-In Edge Types
 
@@ -55,17 +56,22 @@ This means feature `F-001` supports capability `C-001`.
 - Pattern anchors are matched structurally and do not need to exist as a single concrete path.
 - `url` anchors name a product surface rather than a repo artifact, so they are checked
   for route syntax only and are never resolved against disk.
+- Every assessment must reference an existing node of an anchorable type.
+- Every assessment must carry an integer `score` from 0 to 4 and an `assessed` date
+  of the form `YYYY-MM-DD` that names a real day.
+- A node may be assessed at most once.
 
 These rules are built into `ydk`; they are not configured per repo.
 
 ## Per-Repo Configuration
 
-Each repo configures two files, plus an optional third:
+Each repo configures two files, plus two optional ones:
 
 ```text
 .ydk/
   graph.yaml
   anchors.yaml
+  assessments.yaml
   ignore
 ```
 
@@ -208,6 +214,41 @@ and `http://127.0.0.1:4173/#/map` all resolve the same anchor.
 Exact file anchors take precedence over directory and pattern anchors.
 Package script anchors resolve from `path#symbol` targets such as `package.json#build`.
 
+### assessments.yaml
+
+`assessments.yaml` is optional. It records how well each node's anchored
+artifacts fulfill what that node claims. A repo with no such file is a valid
+repo with no assessments.
+
+```yaml
+version: 1
+
+assessments:
+  - node: C-001
+    score: 3
+    assessed: 2026-08-23
+    unfulfilled:
+      - Trace only returns the first path; multi-parent nodes are unexplained.
+    undeclared:
+      - targetResolver also does display formatting, which no node claims.
+```
+
+| Field | Required | Shape |
+| --- | --- | --- |
+| `node` | yes | The id of an existing `capability` or `feature` node. |
+| `score` | yes | Integer from 0 to 4. |
+| `assessed` | yes | Date the judgment was made, as `YYYY-MM-DD`. |
+| `unfulfilled` | no | Strings naming purpose the node claims that its artifacts do not deliver. Defaults to empty. |
+| `undeclared` | no | Strings naming behavior in those artifacts that the node's claim does not cover. Defaults to empty. |
+
+`node` is restricted to the anchorable types for the same reason node coverage
+counts only those: a `mission` or `outcome` is fulfilled through the nodes
+beneath it rather than by artifacts of its own.
+
+At most one entry may exist per node. `ydk` loads, validates, and displays these
+judgments; it never produces them. They are written by a person or an agent
+reading the code.
+
 ### ignore
 
 `.ydk/ignore` is optional. It lists paths that `ydk coverage` should leave out of
@@ -251,6 +292,72 @@ now matches nothing. Stale anchors are reported separately from coverage because
 they mean the graph has drifted from the repo rather than that the repo is
 under-anchored. A `url` anchor is never stale: `ydk` cannot tell from the repo
 whether a route is still served.
+
+## Assessments
+
+Coverage answers whether a node points at anything. An assessment answers a
+different question: given that a node points at something, how well does that
+something do what the node says? Coverage can be complete while the
+implementation behind it barely serves the purpose it claims.
+
+An assessment judges **one node against its own direct anchors**. It never
+traverses graph edges. A capability gets no credit for the artifacts anchored to
+the features beneath it, even though those features support it — that is a
+separate question about how coherently a node's children add up to the node, and
+`ydk` does not answer it yet. So a capability whose only anchors are two design
+documents is judged on those two documents, however much working code hangs off
+its features.
+
+### Score Rubric
+
+| Score | Meaning |
+| --- | --- |
+| 0 | The anchored artifacts do not serve the stated purpose. |
+| 1 | Tangential; the claim is mostly unmet. |
+| 2 | Partial; the core is met but with significant gaps. |
+| 3 | The artifacts fulfill the stated purpose. |
+| 4 | They fulfill it completely, with no findings in either direction. |
+
+A score of 4 means both finding lists are empty. If either list has an entry,
+the score belongs below 4.
+
+### Making an Assessment
+
+To assess a node:
+
+1. Read the node's `title` and `statement`. That is the claim being tested.
+2. List the anchors that name this node, and read each anchor's `reason` — the
+   reason is what the repo asserts the artifact contributes.
+3. Read the anchored artifacts themselves. The judgment is about what the code,
+   documents, and surfaces actually do, not about what the anchors say they do.
+4. Record findings in both directions. `unfulfilled` names purpose the node
+   claims that the artifacts do not deliver. `undeclared` names behavior in the
+   artifacts that the node's claim does not cover. The second direction matters
+   as much as the first: it is how drift between the graph and the repo becomes
+   visible, and it often means either the node's statement is too narrow or the
+   artifact is doing something that belongs elsewhere.
+5. Pick the score that matches the rubric, and set `assessed` to the date.
+
+An anchorable node with **no anchors** should not get an assessment entry at
+all. Coverage already reports it as unanchored; assessing it would report the
+same gap twice. Validation does not reject such an entry, since the rule is a
+convention about what is worth recording rather than a structural constraint.
+
+### Freshness
+
+The `assessed` date is the only freshness signal `ydk` keeps. Nothing marks an
+assessment stale when the artifacts beneath it change, and nothing recomputes a
+score. Re-assessment is manual and happens at the maintainer's discretion; the
+date is there so a reader can weigh a judgment against how much the repo has
+moved since it was made.
+
+### Where Assessments Appear
+
+`ydk coverage` shows a score beside each assessed node and adds one summary row
+counting how many anchorable nodes have been assessed, with their average score.
+A repo with no assessments file gets the report exactly as it was before. The
+browser explorer shows the score and both finding lists on a node's detail
+panel, and lists the assessed nodes on its coverage page.
 
 ## Browser Explorer
 

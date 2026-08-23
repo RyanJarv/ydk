@@ -8,7 +8,7 @@ import {
   readPackageScripts,
   stringTargetValue,
 } from "./targetResolver.ts";
-import type { Anchor, NodeId, YdkProject } from "./types.ts";
+import type { Anchor, Assessment, GraphNode, NodeId, YdkProject } from "./types.ts";
 
 export type DirectoryCoverage = {
   path: string;
@@ -23,6 +23,14 @@ export type StaleAnchor = {
   reason: string;
 };
 
+export type AssessedNode = {
+  id: NodeId;
+  type: string;
+  title: string;
+  score: number;
+  assessed: string;
+};
+
 export type CoverageReport = {
   anchorableNodeCount: number;
   anchoredNodeCount: number;
@@ -31,6 +39,8 @@ export type CoverageReport = {
   anchoredFiles: number;
   directories: DirectoryCoverage[];
   staleAnchors: StaleAnchor[];
+  assessedNodes: AssessedNode[];
+  averageScore: number | null;
 };
 
 export type AnchorStatus = {
@@ -40,7 +50,7 @@ export type AnchorStatus = {
 };
 
 const EXCLUDED_DIRECTORIES = new Set([".git", "node_modules", ".ydk"]);
-const ANCHORABLE_NODE_TYPES = new Set(["capability", "feature"]);
+export const ANCHORABLE_NODE_TYPES = new Set(["capability", "feature"]);
 const ROOT_DIRECTORY_PATH = ".";
 
 export function listProjectFiles(project: YdkProject): string[] {
@@ -137,6 +147,9 @@ export function computeCoverage(
     }
   }
 
+  const assessedNodes = collectAssessedNodes(project, anchorableNodes);
+  const scores = assessedNodes.map((node) => node.score).filter((score) => Number.isFinite(score));
+
   return {
     anchorableNodeCount: anchorableNodes.length,
     anchoredNodeCount: anchorableNodes.length - unanchoredNodes.length,
@@ -145,7 +158,41 @@ export function computeCoverage(
     anchoredFiles: anchoredFiles.size,
     directories: buildDirectoryTree(files, anchoredFiles),
     staleAnchors,
+    assessedNodes,
+    averageScore: scores.length > 0 ? scores.reduce((total, score) => total + score, 0) / scores.length : null,
   };
+}
+
+/**
+ * Reports assessments in graph order, and only for anchorable nodes the graph
+ * still declares. Anything else is a validation error rather than something to
+ * render, so a node assessed twice keeps the first entry written.
+ */
+function collectAssessedNodes(project: YdkProject, anchorableNodes: GraphNode[]): AssessedNode[] {
+  const assessmentByNode = new Map<NodeId, Assessment>();
+
+  for (const assessment of project.assessments.assessments) {
+    if (!assessmentByNode.has(assessment.node)) {
+      assessmentByNode.set(assessment.node, assessment);
+    }
+  }
+
+  return anchorableNodes.flatMap((node) => {
+    const assessment = assessmentByNode.get(node.id);
+    if (!assessment) {
+      return [];
+    }
+
+    return [
+      {
+        id: node.id,
+        type: node.type,
+        title: node.title,
+        score: assessment.score,
+        assessed: assessment.assessed,
+      },
+    ];
+  });
 }
 
 function collectFiles(root: string, relative: string, ignorePatterns: string[], files: string[]): void {

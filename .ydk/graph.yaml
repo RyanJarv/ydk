@@ -58,6 +58,10 @@ nodes:
     type: feature
     title: Visualize the purpose graph as a navigable map
 
+  - id: F-005
+    type: feature
+    title: Report how well anchored artifacts fulfill their purpose nodes
+
 edges:
   - from: O-001
     to: M-001
@@ -105,4 +109,8 @@ edges:
 
   - from: F-004
     to: C-003
+    type: supports
+
+  - from: F-005
+    to: C-004
     type: supports

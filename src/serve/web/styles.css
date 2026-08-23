@@ -386,6 +386,13 @@ h3 {
   font-size: 1.35rem;
 }
 
+.detail-badges {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
 .statement {
   background: #f3f6f1;
   border-left: 4px solid #2e7d5b;
@@ -596,6 +603,36 @@ h3 {
 
 .compact {
   min-height: 92px;
+}
+
+.assessment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assessment > p {
+  margin: 0;
+}
+
+.assessment .section-head {
+  margin-bottom: 0;
+}
+
+.assessment h4 {
+  font-size: 0.78rem;
+  margin: 0 0 4px;
+}
+
+.finding-list {
+  color: #56675e;
+  font-size: 0.8rem;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.finding-list li {
+  margin-top: 4px;
 }
 
 /* ------------------------------------------------------------------ map */

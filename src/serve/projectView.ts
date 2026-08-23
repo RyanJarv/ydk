@@ -6,7 +6,7 @@ import {
 } from "../graph/coverage.ts";
 import { formatAnchorTarget } from "../graph/targetResolver.ts";
 import { allTracesToRoot } from "../graph/trace.ts";
-import type { Anchor, GraphNode, NodeId, YdkProject } from "../graph/types.ts";
+import type { Anchor, Assessment, GraphNode, NodeId, YdkProject } from "../graph/types.ts";
 
 export type ProjectViewAnchor = {
   display: string;
@@ -16,10 +16,18 @@ export type ProjectViewAnchor = {
   stale?: boolean;
 };
 
+export type ProjectViewAssessment = {
+  score: number;
+  assessed: string;
+  unfulfilled: string[];
+  undeclared: string[];
+};
+
 export type ProjectViewNode = GraphNode & {
   anchors: ProjectViewAnchor[];
   trace: string[];
   traces: string[][];
+  assessment?: ProjectViewAssessment;
 };
 
 export type ProjectView = {
@@ -53,6 +61,13 @@ export function createProjectView(project: YdkProject): ProjectView {
     anchorsByNode.set(anchor.node, anchors);
   }
 
+  const assessmentByNode = new Map<NodeId, Assessment>();
+  for (const assessment of project.assessments.assessments) {
+    if (!assessmentByNode.has(assessment.node)) {
+      assessmentByNode.set(assessment.node, assessment);
+    }
+  }
+
   const anchorViews = new Map<Anchor, ProjectViewAnchor>(
     project.anchors.anchors.map((anchor) => {
       const status = computeAnchorStatus(project, anchor, files);
@@ -73,12 +88,14 @@ export function createProjectView(project: YdkProject): ProjectView {
     const traces = (allTracesToRoot(project.graph, node.id) ?? []).map((trace) =>
       trace.map((step) => step.node.id),
     );
+    const assessment = assessmentByNode.get(node.id);
 
     return {
       ...node,
       anchors: (anchorsByNode.get(node.id) ?? []).map((anchor) => anchorView(anchorViews, anchor)),
       trace: traces[0] ?? [],
       traces,
+      ...(assessment ? { assessment: assessmentView(assessment) } : {}),
     };
   });
 
@@ -100,6 +117,15 @@ export function createProjectView(project: YdkProject): ProjectView {
       anchoredNodeCount: coverage.anchoredNodeCount,
     },
     coverage,
+  };
+}
+
+function assessmentView(assessment: Assessment): ProjectViewAssessment {
+  return {
+    score: assessment.score,
+    assessed: assessment.assessed,
+    unfulfilled: assessment.unfulfilled ?? [],
+    undeclared: assessment.undeclared ?? [],
   };
 }
 

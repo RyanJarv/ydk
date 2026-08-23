@@ -20,7 +20,10 @@ const METER_FILL_CELL = "█";
 const METER_TRACK_CELL = "░";
 const METER_WARNING_PERCENT = 70;
 const UNANCHORED_PREVIEW_LIMIT = 3;
-const COVERAGE_LABELS = ["nodes anchored", "files anchored", "stale anchors"];
+const COVERAGE_LABELS = ["nodes anchored", "files anchored", "stale anchors", "nodes assessed"];
+const MAX_SCORE = 4;
+/** Below this a node's anchored artifacts do not yet fulfill what it claims. */
+const SCORE_WARNING_LEVEL = 3;
 
 export type RenderOptions = {
   color: boolean;
@@ -394,7 +397,12 @@ type CoverageColumns = {
 };
 
 function coverageColumns(report: CoverageReport): CoverageColumns {
-  const values = [report.anchoredNodeCount, report.anchoredFiles, report.staleAnchors.length];
+  const values = [
+    report.anchoredNodeCount,
+    report.anchoredFiles,
+    report.staleAnchors.length,
+    report.assessedNodes.length,
+  ];
   const totals = [report.anchorableNodeCount, report.totalFiles];
 
   return {
@@ -425,24 +433,68 @@ export function renderCoverageSummary(report: CoverageReport, options: RenderOpt
   const stalePadding = " ".repeat(3 + columns.totalWidth);
   const stalePointer = staleCount > 0 ? `  ${palette.meta("ydk coverage --stale to list")}` : "";
 
-  return [
+  const lines = [
     meterRow("nodes anchored", report.anchoredNodeCount, report.anchorableNodeCount, columns, options),
     meterRow("files anchored", report.anchoredFiles, report.totalFiles, columns, options),
     `  ${"stale anchors".padEnd(columns.labelWidth)}  ${
       staleCount > 0 ? palette.stale(staleValue) : staleValue
     }${stalePadding}${stalePointer}`.trimEnd(),
-  ].join("\n");
+  ];
+
+  // A project with no assessments file keeps the report it had before assessments existed.
+  if (report.assessedNodes.length > 0) {
+    const row = meterRow(
+      "nodes assessed",
+      report.assessedNodes.length,
+      report.anchorableNodeCount,
+      columns,
+      options,
+    );
+    const average =
+      report.averageScore === null ? "" : `  ${palette.meta(`avg score ${report.averageScore.toFixed(1)}`)}`;
+
+    lines.push(`${row}${average}`);
+  }
+
+  return lines.join("\n");
 }
 
 export function renderCoverage(report: CoverageReport, options: RenderOptions): string {
   const preview = renderUnanchoredPreview(report, options);
+  const assessed = renderAssessedNodes(report, options);
   const lines = [renderCoverageSummary(report, options)];
 
   if (preview) {
     lines.push("", preview);
   }
 
+  if (assessed) {
+    lines.push("", assessed);
+  }
+
   return lines.join("\n");
+}
+
+function renderAssessedNodes(report: CoverageReport, options: RenderOptions): string {
+  const palette = createPalette(options.color);
+  const nodes = report.assessedNodes;
+
+  if (nodes.length === 0) {
+    return "";
+  }
+
+  const idWidth = Math.max(...nodes.map((node) => node.id.length));
+  const titleWidth = Math.max(...nodes.map((node) => node.title.length));
+
+  return [
+    palette.meta("  assessed nodes"),
+    ...nodes.map((node) => {
+      const score = `score ${node.score}/${MAX_SCORE}`;
+      const style = node.score < SCORE_WARNING_LEVEL ? palette.warn : palette.meta;
+
+      return `    ${palette.id(node.id.padEnd(idWidth))}  ${node.title.padEnd(titleWidth)}  ${style(score)}`;
+    }),
+  ].join("\n");
 }
 
 function unanchoredLines(

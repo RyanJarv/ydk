@@ -8,6 +8,38 @@ import { resolveWhy } from "../src/graph/resolveWhy.ts";
 import { traceToRoot } from "../src/graph/trace.ts";
 import { validateProject } from "../src/graph/validateProject.ts";
 
+const GRAPH_YAML = [
+  "version: 1",
+  "nodes:",
+  "  - id: M-001",
+  "    type: mission",
+  "    title: Mission",
+  "  - id: C-001",
+  "    type: capability",
+  "    title: Capability",
+  "edges:",
+  "  - from: C-001",
+  "    to: M-001",
+  "    type: supports",
+  "",
+].join("\n");
+
+const ANCHORS_YAML = ["version: 1", "anchors: []", ""].join("\n");
+
+/** Writes a throwaway .ydk directory so loading can be exercised without the repo's own files. */
+async function createConfiguredProject(assessmentsYaml?: string): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ydk-assessments-"));
+  await mkdir(path.join(root, ".ydk"), { recursive: true });
+  await writeFile(path.join(root, ".ydk", "graph.yaml"), GRAPH_YAML, "utf8");
+  await writeFile(path.join(root, ".ydk", "anchors.yaml"), ANCHORS_YAML, "utf8");
+
+  if (assessmentsYaml !== undefined) {
+    await writeFile(path.join(root, ".ydk", "assessments.yaml"), assessmentsYaml, "utf8");
+  }
+
+  return root;
+}
+
 async function createTempProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ydk-target-resolver-"));
   await mkdir(path.join(root, "generated"), { recursive: true });
@@ -298,6 +330,142 @@ test("validates that concrete anchors reference existing files, directories, and
     result.errors.includes("Anchor package.json#test references missing package script: package.json#test"),
   );
   assert.ok(!result.errors.some((error) => error.includes("generated")));
+});
+
+test("loads assessments from .ydk/assessments.yaml", async () => {
+  const root = await createConfiguredProject(
+    [
+      "version: 1",
+      "",
+      "assessments:",
+      "  - node: C-001",
+      "    score: 3",
+      "    assessed: 2026-08-23",
+      "    unfulfilled:",
+      "      - Trace only returns the first path.",
+      "    undeclared:",
+      "      - targetResolver also formats display strings.",
+      "  - node: F-001",
+      "    score: 4",
+      "    assessed: 2026-08-20",
+      "",
+    ].join("\n"),
+  );
+
+  const project = await loadProject(root);
+
+  assert.deepEqual(project.assessments, {
+    version: 1,
+    assessments: [
+      {
+        node: "C-001",
+        score: 3,
+        assessed: "2026-08-23",
+        unfulfilled: ["Trace only returns the first path."],
+        undeclared: ["targetResolver also formats display strings."],
+      },
+      {
+        node: "F-001",
+        score: 4,
+        assessed: "2026-08-20",
+      },
+    ],
+  });
+});
+
+test("loads an empty assessment list when the file is absent", async () => {
+  const project = await loadProject(await createConfiguredProject());
+
+  assert.deepEqual(project.assessments, { version: 1, assessments: [] });
+});
+
+test("fails to load an assessments file that holds no assessment list", async () => {
+  const root = await createConfiguredProject("version: 1\nassessment: C-001\n");
+
+  await assert.rejects(loadProject(root), /must contain an assessments list/u);
+});
+
+test("validates that an assessment names an anchorable node", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.assessments.assessments = [
+    { node: "C-404", score: 3, assessed: "2026-08-23" },
+    { node: "M-001", score: 3, assessed: "2026-08-23" },
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.errors.filter((error) => error.startsWith("Assessment")),
+    [
+      "Assessment references unknown node: C-404",
+      "Assessment M-001 uses non-anchorable node type: mission",
+    ],
+  );
+});
+
+test("validates that a score is an integer within the rubric", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.assessments.assessments = [
+    { node: "C-001", score: 5, assessed: "2026-08-23" },
+    { node: "C-001", score: -1, assessed: "2026-08-23" },
+    { node: "C-001", score: 2.5, assessed: "2026-08-23" },
+    { node: "C-001", assessed: "2026-08-23" } as never,
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.errors.filter((error) => error.includes("invalid score")),
+    [
+      "Assessment C-001 has invalid score: 5",
+      "Assessment C-001 has invalid score: -1",
+      "Assessment C-001 has invalid score: 2.5",
+      "Assessment C-001 has invalid score: undefined",
+    ],
+  );
+});
+
+test("validates that assessed names a real day in ISO order", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.assessments.assessments = [
+    { node: "C-001", score: 3, assessed: "23 August 2026" },
+    { node: "C-001", score: 3, assessed: "2026-02-30" },
+    { node: "C-001", score: 3 } as never,
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.errors.filter((error) => error.includes("invalid assessed date")),
+    [
+      'Assessment C-001 has invalid assessed date: "23 August 2026"',
+      'Assessment C-001 has invalid assessed date: "2026-02-30"',
+      "Assessment C-001 has invalid assessed date: undefined",
+    ],
+  );
+});
+
+test("rejects a second assessment of the same node", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.assessments.assessments = [
+    { node: "C-001", score: 3, assessed: "2026-08-23" },
+    { node: "C-001", score: 1, assessed: "2026-08-24" },
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, ["Duplicate assessment for node: C-001"]);
+});
+
+test("accepts a well-formed assessment of an anchorable node", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.assessments.assessments = [{ node: "C-001", score: 0, assessed: "2026-08-23" }];
+
+  assert.deepEqual(validateProject(project), { ok: true, errors: [] });
 });
 
 test("traces graph nodes to the configured root", async () => {
