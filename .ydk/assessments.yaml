@@ -1,0 +1,77 @@
+version: 1
+
+assessments:
+  - node: C-001
+    score: 2
+    assessed: 2026-08-23
+    unfulfilled:
+      - src/graph/targetResolver.ts silently skips any anchor whose kind has no resolver, so a typo such as `kind: fille` resolves nothing yet still passes validation and counts its node as anchored.
+      - src/graph/types.ts still declares a `symbol` target kind that no resolver, validator, or coverage path implements, so symbol anchors cannot resolve an artifact to anything.
+      - resolveTarget keeps only the single highest-specificity anchor and drops the rest, so an artifact that legitimately serves several purposes can be explained by only one of them.
+      - loadProject reads .ydk/ from the process working directory alone, so artifacts in another checkout cannot be resolved without copying a configuration into it.
+    undeclared:
+      - docs/examples holds four fictional sessions for commands that do not exist (`ydk show`, `ydk impact`, `ydk review`, `ydk ci`, `ydk propose-anchor`), which explores future direction rather than resolving artifacts to intent.
+      - docs/design-log.md records superseded design history, which docs/MODEL.md itself places outside the current-purpose graph.
+      - package.json and tsconfig.json configure how the project runs and type-checks rather than how any artifact resolves to intent.
+      - docs/MODEL.md specifies the whole built-in ontology, validation rules, coverage semantics, and assessment format, most of which belongs to nodes other than this one.
+
+  - node: C-002
+    score: 1
+    assessed: 2026-08-23
+    unfulfilled:
+      - The only anchored artifact is a point-in-time study of one external repository, so nothing here keeps this repo's mapping trustworthy or complete between studies.
+      - The study is frozen at bb-private commit c6823c11 on 2026-08-21 and records no status against its own findings, so a reader cannot tell that the Vue runtime issue was fixed while unusable symbol anchors still stand.
+      - Nothing anchored to this node measures completeness of the mapping; this repo's 70% node coverage and three unanchored nodes are reported only by artifacts anchored to F-003.
+    undeclared:
+      - docs/onboarding/bb-private/graph.yaml and anchors.yaml are a candidate purpose graph and anchor set for a different repository, kept as a reusable worked example that no node claims.
+      - The study also prescribes an eight-step onboarding method and a next-iteration plan, which is process guidance for a future `onboard` command rather than a record of trustworthiness.
+
+  - node: C-003
+    score: 3
+    assessed: 2026-08-23
+    unfulfilled:
+      - The explorer search matches only the literal text of anchor targets and reasons, so a file covered by a directory or pattern anchor (src/serve/server.ts, docs/examples/direct-cli.md) cannot be found in the UI even though `ydk why` explains it.
+      - Map nodes are plain divs with a click handler and no tabindex or role, so the view built for understanding the graph at a glance is unreachable by keyboard or assistive technology.
+    undeclared:
+      - src/serve/projectView.ts recomputes the full coverage report and per-anchor stale status, and server.ts ships validateProject output to the browser, which is work claimed by F-002 and F-003.
+      - src/serve/server.ts also acts as a static asset host, resolving and serving a vendored Vue runtime out of ydk's own node_modules.
+
+  - node: F-001
+    score: 2
+    assessed: 2026-08-23
+    unfulfilled:
+      - The /#/explorer surface has no artifact-path query: its search substring-matches anchor display text, so asking why src/serve/server.ts or docs/examples/direct-cli.md exists returns nothing, unlike `ydk why`.
+      - resolveWhy returns a single best anchor and never mentions the others, so an artifact with several legitimate reasons for existing is explained by only one of them.
+    undeclared:
+      - src/cli.ts and the `ydk` package script also implement validate, graph, coverage, and serve, so the behavior of four other nodes is anchored entirely to this feature.
+      - src/launcher.ts and the `serve` package script start the browser explorer inside a Node permission sandbox, which is server startup and hardening rather than explaining an artifact.
+
+  - node: F-002
+    score: 2
+    assessed: 2026-08-23
+    unfulfilled:
+      - Validation reports a configuration valid when an anchor names a kind no resolver implements, confirmed with both a typo kind and the declared `symbol` kind, so a mapping that resolves nothing passes the check.
+      - No anchored test exercises src/cli.ts argument parsing or exit codes, or the 1,455-line browser app, so the `test` script's claim to protect current behavior stops at the module boundary.
+    undeclared:
+      - validateProject.ts enforces a dozen rules beyond mission reachability, including single mission, duplicate ids, node and edge types, cycles, anchor targets on disk, and every assessment score, date, and duplication rule.
+      - tests/*.test.ts mostly exercise rendering, coverage, tracing, and the serve view, and the `typecheck` script checks the whole implementation, rather than graph-to-mission validation.
+
+  - node: F-003
+    score: 3
+    assessed: 2026-08-23
+    unfulfilled:
+      - An anchor whose kind is unrecognized still marks its node anchored and is never reported stale, so the headline node-coverage figure can count a mapping that resolves nothing.
+      - The report says how much of the repo is anchored but never which files are not, so acting on a figure such as 33 / 39 files anchored means re-deriving the gap by hand.
+    undeclared:
+      - coverage.ts collects assessment scores and computes their average, and the /#/coverage page lists the assessed nodes, which is the purpose of the still-unanchored F-005.
+      - computeAnchorStatus is exported to give the explorer's detail panel per-anchor freshness, which is artifact-level status rather than a repo-level coverage report.
+
+  - node: F-004
+    score: 2
+    assessed: 2026-08-23
+    unfulfilled:
+      - The map has no search or filter of its own, since the search box lives only in the explorer view, so on a graph larger than this one there is no way to find a node before navigating from it.
+      - Map nodes are click-only divs with no keyboard focus, and src/render.ts draws a static terminal tree, so neither anchored artifact is navigable without a mouse.
+    undeclared:
+      - Most of src/render.ts renders things other than the graph: why headers, trace trees, coverage meters, stale-anchor and unanchored-node lists, and assessed-node scores, which is output for F-001, F-003, and the unanchored F-005.
+      - renderGraphTree's depth limiting and hidden-node summaries, the --flat edge list, and --json output are terminal presentation modes that a navigable map does not describe.

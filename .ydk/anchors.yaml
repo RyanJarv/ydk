@@ -56,6 +56,12 @@ anchors:
     reason: Records real-repository evaluations of how trustworthy and useful the purpose mapping is in practice.
 
   - target:
+      kind: file
+      value: .ydk/assessments.yaml
+    node: F-005
+    reason: Records the current judgments of how well each node's anchored artifacts fulfill it.
+
+  - target:
       kind: packageScript
       value:
         path: package.json
