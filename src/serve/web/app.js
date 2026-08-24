@@ -1506,10 +1506,10 @@ const App = {
                   <div class="section-head">
                     <h3>Anchored Artifacts</h3>
                     <span v-if="selectedNode.anchors.length" class="muted">
-                      {{ selectedNode.anchors.length }}<template v-if="anchorsGrouped">
-                        across {{ anchorGroups.length }} {{ anchorGroups.length === 1 ? 'directory' : 'directories' }}
+                      <template v-if="anchorsGrouped">
+                        {{ selectedNode.anchors.length }} across {{ anchorGroups.length }} {{ anchorGroups.length === 1 ? 'directory' : 'directories' }}
                       </template><template v-else>
-                        {{ selectedNode.anchors.length === 1 ? 'anchor' : 'anchors' }}
+                        {{ selectedNode.anchors.length === 1 ? '1 anchor' : selectedNode.anchors.length + ' anchors' }}
                       </template>
                     </span>
                     <span class="muted section-note">The artifacts this node claims.</span>
