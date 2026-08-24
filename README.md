@@ -6,17 +6,52 @@ This repository dogfoods the idea. `ydk` has a small built-in model, and the `.y
 
 ## Why?
 
-Exactly.
-
-If your question is how? Take a look at [pit](https://github.com/RyanJarv/pit).
-
-These concepts might make sense to merge, but it's unclear how.
-
 Really this is just an experiment... I'm not actually sure this really makes sense. I think you could probably think of it as effectively comments/documentation in graph form. My hope is that doing this helps expose inconsistencies that come about from generating large amounts of code. LLMs seem to be very good at making the right decision when they have the right information, but they rarely seem to have the right information...
 
 Also... LLMs seem to make all kinds of weird justifications for things when you're not careful to audit the reasoning behind everything. This get's super tiring, I think a tree graph could potentially make this easier, you have your mission statements on the left, just a couple sentences which serve as justification for everything in the project. Something like that.. 
 
-I think ideally this would exist as comments tbh. I don't really like that it's some opaque format that get's stuck in a dot folder. But idk, need to think about this more.
+## Progress
+
+> How useful is this project currently?
+
+Likely not very, right now ydk is only used to build ydk.
+
+> What needs to be done to make this project useful?
+
+Right now the project uses Mission, Outcomes, Capabilities, and Features to split up the why graph. This seems a bit confusing to me... need to assess if this should be made simpler. What's the difference between Capabilities and Features? What purpose does each type serve? I suppose this could probably be graphed with ydk...
+
+Once that's sorted out, how anchors and assessments work needs to be reviewed. I think if these things are nailed down then the project would start to be useful.
+
+Right now anchors are kinda just another part of the graph that is rooted in a concrete *thing* in the project rather than an idea and they can be attached to any node in the ydk graph. So they really are just kind of part of the graph, kinda.
+
+## Notes
+
+The [Model](docs/MODEL.md) doc is the agent maintained version. This section is just [Why](#why?) and [Notes](#notes) section is my own current understanding.
+
+Above I said anchors are part of the graph. It might make more sense to think of this all as a two-layer graph:
+
+- Purpose layer: graph.yaml — authored, a DAG with supports edges, validated (single mission, acyclic, reachable).
+- Implementation layer: the repo itself — discovered, not authored, and currently has no intra-layer edges of its own (ydk doesn't model imports or containment; the filesystem is just a vertex set).
+- Anchors: the bipartite inter-layer edges. Notably your own anchor reason already says this: ".ydk/anchors.yaml — Maps repo artifacts to the purpose graph without adding each artifact as a graph node."
+
+I imagine other projects have modeled the implementation layer so if we ever end up doing anything there maybe worth looking around before inventing something new. So basically, this project just focuses on the Purpose Layer, and Anchors that tie it to the Implementation layer. Also assessments...
+
+### Assessments
+
+Assessments are what I believe will make this project actually useful. They are an evaluation of how well concrete *things* fulfill or are aligned to nodes in the ydk graph, or alternatively, how well nodes are aligned to other nodes. This is probably better thought of properties of the graph edge, but exists as it's own concept currently.
+
+Assessments will eventually be automatically updated when the implementation is reviewed by an agent in the context of the ydk graph and are what reduce the aligned-ness to a number (with reasoning) that can be represented in the web-ui and will eventually guide agents in either correcting the implementation or surfacing issues with the graph.
+
+Changes to the graph are all handled manually currently, but the intention is that they would all be reviewed by the user even if the suggestion is surfaced by an agent.
+
+Ensuring assessments reflect the state of the project aligned-ness in a valuable way and provide valuable information to users and implementations agents will likely be the bulk of the fine tuning work and may be tricky to get right.
+
+### Later
+
+Once everything is working well with higher level concepts the question is how far does it make sense to take this concept... should every function in the project be attached to the graph?
+
+Also what's the best way to have the graph integrated with the project? Right now the ydk graph is an opaque format that get's stuck in a dot folder but would it make more sense as comments alongside the code?
+
 
 ## Try it
 
