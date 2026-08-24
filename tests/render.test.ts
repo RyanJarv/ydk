@@ -11,9 +11,12 @@ import {
   renderMeter,
   renderStaleAnchors,
   renderTraceSection,
+  renderUnanchoredFiles,
   renderUnanchoredNodes,
+  renderWhyHeader,
 } from "../src/render.ts";
 import type { CoverageReport } from "../src/graph/coverage.ts";
+import type { WhyResult } from "../src/graph/resolveWhy.ts";
 import type { Anchor, GraphConfig } from "../src/graph/types.ts";
 
 const multiParentGraph: GraphConfig = {
@@ -52,6 +55,12 @@ const coverageReport: CoverageReport = {
   ],
   totalFiles: 256,
   anchoredFiles: 167,
+  unanchoredFiles: [
+    ".gitignore",
+    "docs/assets/map.png",
+    "docs/assets/overview.png",
+    "src/legacy/rollout.ts",
+  ],
   directories: [
     { path: ".", totalFiles: 2, anchoredFiles: 1, children: [] },
     {
@@ -194,6 +203,68 @@ test("labels each path for --all-paths", () => {
   );
 });
 
+test("names the directory anchor a queried file matched through", () => {
+  const result: WhyResult = {
+    anchor: {
+      target: { kind: "directory", value: "docs/examples" },
+      node: "C-001",
+      reason: "Explores how the purpose graph could be used.",
+    },
+    displayTarget: "docs/examples",
+    trace: [],
+  };
+
+  assert.equal(
+    renderWhyHeader(result, "docs/examples/direct-cli.md", plain),
+    [
+      "docs/examples/direct-cli.md",
+      "  matched via directory docs/examples",
+      "  anchored to C-001",
+      "  Explores how the purpose graph could be used.",
+    ].join("\n"),
+  );
+});
+
+test("names the pattern anchor a queried file matched through", () => {
+  const result: WhyResult = {
+    anchor: {
+      target: { kind: "filePattern", value: "src/serve/**" },
+      node: "C-003",
+      reason: "Provides the local web app.",
+    },
+    displayTarget: "src/serve/**",
+    matchedPattern: "src/serve/**",
+    trace: [],
+  };
+
+  assert.equal(
+    renderWhyHeader(result, "src/serve/server.ts", plain),
+    [
+      "src/serve/server.ts",
+      "  matched via filePattern src/serve/**",
+      "  anchored to C-003",
+      "  Provides the local web app.",
+    ].join("\n"),
+  );
+});
+
+test("leaves out the matched line when the anchor names the queried path", () => {
+  const result: WhyResult = {
+    anchor: {
+      target: { kind: "file", value: "src/cli.ts" },
+      node: "F-001",
+      reason: "Provides the command interface.",
+    },
+    displayTarget: "src/cli.ts",
+    trace: [],
+  };
+
+  assert.equal(
+    renderWhyHeader(result, "src/cli.ts", plain),
+    ["src/cli.ts", "  anchored to F-001", "  Provides the command interface."].join("\n"),
+  );
+});
+
 test("renders the coverage summary and a truncated unanchored list", () => {
   assert.equal(
     renderCoverage(coverageReport, plain),
@@ -207,15 +278,19 @@ test("renders the coverage summary and a truncated unanchored list", () => {
       "    F-016  Diff signed manifests offline",
       "    F-022  Replay drift alerts against change intent",
       "    +2 more · ydk coverage --unanchored",
+      "",
+      "  4 files unanchored · ydk coverage --unanchored-files",
     ].join("\n"),
   );
 });
 
-test("drops the unanchored section and the stale pointer when there is nothing to report", () => {
+test("drops the unanchored sections and the stale pointer when there is nothing to report", () => {
   const clean: CoverageReport = {
     ...coverageReport,
     anchoredNodeCount: 37,
     unanchoredNodes: [],
+    anchoredFiles: 256,
+    unanchoredFiles: [],
     staleAnchors: [],
   };
 
@@ -223,7 +298,7 @@ test("drops the unanchored section and the stale pointer when there is nothing t
     renderCoverage(clean, plain),
     [
       "  nodes anchored   37 / 37   ██████████  100%",
-      "  files anchored  167 / 256  ███████░░░   65%",
+      "  files anchored  256 / 256  ██████████  100%",
       "  stale anchors     0",
     ].join("\n"),
   );
@@ -247,6 +322,8 @@ test("adds the assessed summary row and node scores when the project has assessm
       "  assessed nodes",
       "    C-001  Verify deployment provenance  score 3/4",
       "    F-001  Export an audit bundle        score 2/4",
+      "",
+      "  4 files unanchored · ydk coverage --unanchored-files",
     ].join("\n"),
   );
 });
@@ -281,6 +358,29 @@ test("lists every unanchored node and stale anchor for their flags", () => {
       "    src/legacy.ts  F-002  file not found",
       "    docs/*.mdx     C-001  pattern matches no files",
     ].join("\n"),
+  );
+});
+
+test("groups unanchored files under their directory for --unanchored-files", () => {
+  assert.equal(
+    renderUnanchoredFiles(coverageReport, plain),
+    [
+      "  unanchored files",
+      "    .             1 file",
+      "      .gitignore",
+      "    docs/assets/  2 files",
+      "      map.png",
+      "      overview.png",
+      "    src/legacy/   1 file",
+      "      rollout.ts",
+    ].join("\n"),
+  );
+});
+
+test("says so when every walked file is anchored", () => {
+  assert.equal(
+    renderUnanchoredFiles({ ...coverageReport, unanchoredFiles: [] }, plain),
+    "  no unanchored files",
   );
 });
 

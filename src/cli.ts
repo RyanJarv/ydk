@@ -17,6 +17,7 @@ import {
   renderGraphTree,
   renderStaleAnchors,
   renderTraceSection,
+  renderUnanchoredFiles,
   renderUnanchoredNodes,
   renderWhyHeader,
   type RenderOptions,
@@ -24,6 +25,8 @@ import {
 
 const HELP_ARGUMENTS = new Set(["--help", "-h", "help"]);
 const MAX_TRACES = 50;
+/** Keeps every option description in one column, however long the flag is. */
+const OPTION_COLUMN = 20;
 
 function usage(): string {
   return [
@@ -32,7 +35,7 @@ function usage(): string {
     "  ydk trace <node-id> [--all-paths] [--json]",
     "  ydk validate",
     "  ydk graph [--depth <n>] [--flat] [--json]",
-    "  ydk coverage [--unanchored] [--stale] [--dirs] [--json]",
+    "  ydk coverage [--unanchored] [--unanchored-files] [--stale] [--dirs] [--json]",
     "  ydk serve [--host <host>] [--port <port>]",
     "",
     "Run `ydk <command> help` for command-specific help.",
@@ -40,10 +43,14 @@ function usage(): string {
   ].join("\n");
 }
 
+function option(flag: string, description: string): string {
+  return `  ${flag.padEnd(OPTION_COLUMN)}${description}`;
+}
+
 function commandUsage(command: string): string | null {
-  const helpOption = "  -h, --help, help  Show command help";
-  const jsonOption = "  --json            Print machine-readable JSON";
-  const allPathsOption = "  --all-paths       Print every path to the mission";
+  const helpOption = option("-h, --help, help", "Show command help");
+  const jsonOption = option("--json", "Print machine-readable JSON");
+  const allPathsOption = option("--all-paths", "Print every path to the mission");
 
   switch (command) {
     case "why":
@@ -88,8 +95,8 @@ function commandUsage(command: string): string | null {
         "Print the project's purpose graph as a tree rooted at the mission.",
         "",
         "Options:",
-        "  --depth <n>       Limit the levels shown below the mission",
-        "  --flat            Print the purpose graph edges one per line",
+        option("--depth <n>", "Limit the levels shown below the mission"),
+        option("--flat", "Print the purpose graph edges one per line"),
         jsonOption,
         helpOption,
       ].join("\n");
@@ -101,9 +108,10 @@ function commandUsage(command: string): string | null {
         "Report how much of the project is anchored to the purpose graph.",
         "",
         "Options:",
-        "  --unanchored      List every anchorable node without an anchor",
-        "  --stale           List every anchor whose target is missing",
-        "  --dirs            Break file coverage down by directory",
+        option("--unanchored", "List every anchorable node without an anchor"),
+        option("--unanchored-files", "List every walked file no anchor covers"),
+        option("--stale", "List every anchor whose target is missing"),
+        option("--dirs", "Break file coverage down by directory"),
         jsonOption,
         helpOption,
       ].join("\n");
@@ -115,8 +123,8 @@ function commandUsage(command: string): string | null {
         "Start the local project explorer.",
         "",
         "Options:",
-        `  --host <host>     Host to bind (default: ${DEFAULT_SERVE_HOST})`,
-        `  --port <port>     Non-privileged port to bind (default: ${DEFAULT_SERVE_PORT})`,
+        option("--host <host>", `Host to bind (default: ${DEFAULT_SERVE_HOST})`),
+        option("--port <port>", `Non-privileged port to bind (default: ${DEFAULT_SERVE_PORT})`),
         helpOption,
       ].join("\n");
     default:
@@ -268,6 +276,11 @@ async function main(): Promise<void> {
       return;
     }
 
+    if (options.unanchoredFiles) {
+      console.log(renderUnanchoredFiles(report, output));
+      return;
+    }
+
     if (options.stale) {
       console.log(renderStaleAnchors(report, output));
       return;
@@ -358,8 +371,9 @@ function parseCoverageOptions(args: string[]): {
   json: boolean;
   stale: boolean;
   unanchored: boolean;
+  unanchoredFiles: boolean;
 } {
-  const options = { dirs: false, json: false, stale: false, unanchored: false };
+  const options = { dirs: false, json: false, stale: false, unanchored: false, unanchoredFiles: false };
 
   for (const arg of args) {
     if (arg === "--dirs") {
@@ -379,6 +393,11 @@ function parseCoverageOptions(args: string[]): {
 
     if (arg === "--unanchored") {
       options.unanchored = true;
+      continue;
+    }
+
+    if (arg === "--unanchored-files") {
+      options.unanchoredFiles = true;
       continue;
     }
 

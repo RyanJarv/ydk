@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadProject } from "../graph/loadProject.ts";
 import { validateProject } from "../graph/validateProject.ts";
-import { createProjectView } from "./projectView.ts";
+import { createProjectView, createWhyView } from "./projectView.ts";
 
 export type ServeOptions = {
   host?: string;
@@ -79,6 +79,24 @@ export function createProjectServer(options: ServeOptions = {}): Server {
         return;
       }
 
+      if (url.pathname === "/api/why") {
+        const query = url.searchParams.get("path")?.trim() ?? "";
+        if (!query) {
+          sendJson(response, { error: "Ask why about a repo-relative path: /api/why?path=<path>" }, 400);
+          return;
+        }
+
+        const project = await loadProject(root);
+        const why = createWhyView(project, query);
+        if (!why) {
+          sendJson(response, { query, error: `No explanation found for ${query}` }, 404);
+          return;
+        }
+
+        sendJson(response, why);
+        return;
+      }
+
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       response.end("Not found");
     } catch (error) {
@@ -97,8 +115,8 @@ async function sendFile(response: ServerResponse, filePath: string, contentType:
   response.end(content);
 }
 
-function sendJson(response: ServerResponse, body: unknown): void {
-  response.writeHead(200, {
+function sendJson(response: ServerResponse, body: unknown, status = 200): void {
+  response.writeHead(status, {
     "cache-control": "no-store",
     "content-type": "application/json; charset=utf-8",
   });

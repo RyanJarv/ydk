@@ -54,8 +54,9 @@ M-001  Keep project work aligned with its purpose                               
 ```
 
 Add `--depth <n>` or `--flat` to `graph`, `--all-paths` to `why` and `trace`,
-and `--unanchored`, `--stale`, or `--dirs` to `coverage`. Every command that
-reads the graph also takes `--json`. Run `ydk <command> help` for the rest.
+and `--unanchored`, `--unanchored-files`, `--stale`, or `--dirs` to `coverage`.
+Every command that reads the graph also takes
+`--json`. Run `ydk <command> help` for the rest.
 
 ## Configuration
 

@@ -85,6 +85,7 @@ test("counts anchored files across file, pattern, directory, and package script 
 
   assert.equal(coverage.totalFiles, 7);
   assert.equal(coverage.anchoredFiles, 6);
+  assert.deepEqual(coverage.unanchoredFiles, ["src/cli.ts"]);
   assert.deepEqual(coverage.staleAnchors, []);
   assert.deepEqual(coverage.directories, [
     { path: ".", totalFiles: 2, anchoredFiles: 2, children: [] },
@@ -214,6 +215,47 @@ test("skips files matched by .ydk/ignore patterns", async () => {
   assert.deepEqual(coverage.staleAnchors, [
     { display: "dist/**", node: "F-001", reason: "pattern matches no files" },
   ]);
+});
+
+test("names every walked file no anchor covers, in path order", async () => {
+  const root = await createTempRoot({
+    "package.json": packageJson,
+    "README.md": "# Temp project\n",
+    "docs/guide.md": "# Guide\n",
+    "src/graph/trace.ts": "export {};\n",
+    "src/cli.ts": "export {};\n",
+  });
+  const project = createProject(root, [
+    { target: { kind: "file", value: "README.md" }, node: "F-001", reason: "Introduces the project." },
+    { target: { kind: "directory", value: "docs" }, node: "C-001", reason: "Documents the model." },
+  ]);
+
+  const coverage = computeCoverage(project);
+
+  assert.deepEqual(coverage.unanchoredFiles, ["package.json", "src/cli.ts", "src/graph/trace.ts"]);
+  assert.equal(coverage.anchoredFiles + coverage.unanchoredFiles.length, coverage.totalFiles);
+});
+
+test("reports no unanchored files when every walked file is covered", async () => {
+  const root = await createTempRoot({ "src/cli.ts": "export {};\n", "src/graph/trace.ts": "export {};\n" });
+  const project = createProject(root, [
+    { target: { kind: "directory", value: "src" }, node: "C-001", reason: "Holds the implementation." },
+  ]);
+
+  const coverage = computeCoverage(project);
+
+  assert.deepEqual(coverage.unanchoredFiles, []);
+  assert.equal(coverage.anchoredFiles, coverage.totalFiles);
+});
+
+test("leaves an ignored file out of the unanchored list", async () => {
+  const root = await createTempRoot({
+    ".ydk/ignore": "dist/**\n",
+    "dist/bundle.js": "console.log(1);\n",
+    "src/cli.ts": "export {};\n",
+  });
+
+  assert.deepEqual(computeCoverage(createProject(root, [])).unanchoredFiles, ["src/cli.ts"]);
 });
 
 test("counts a file matched by several anchors once", async () => {

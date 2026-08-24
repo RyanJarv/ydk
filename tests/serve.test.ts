@@ -1,43 +1,142 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { loadProject } from "../src/graph/loadProject.ts";
 import { createProjectServer } from "../src/serve/server.ts";
 import { createProjectView } from "../src/serve/projectView.ts";
 import type { YdkProject } from "../src/graph/types.ts";
 
-test("serves the browser runtime when inspecting an external project", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "ydk-external-project-"));
+const GRAPH_YAML = [
+  "version: 1",
+  "nodes:",
+  "  - id: M-001",
+  "    type: mission",
+  "    title: Mission",
+  "  - id: C-001",
+  "    type: capability",
+  "    title: Capability",
+  "edges:",
+  "  - from: C-001",
+  "    to: M-001",
+  "    type: supports",
+  "",
+].join("\n");
+
+const ANCHORS_YAML = [
+  "version: 1",
+  "anchors:",
+  "  - target:",
+  "      kind: directory",
+  "      value: docs/examples",
+  "    node: C-001",
+  "    reason: Explores how the purpose graph could be used.",
+  "",
+].join("\n");
+
+type CapturedResponse = {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+};
+
+/** Writes a throwaway project the server can load, holding one anchored and one unanchored file. */
+async function createServedProject(): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ydk-serve-project-"));
+  await mkdir(path.join(root, ".ydk"), { recursive: true });
+  await mkdir(path.join(root, "docs", "examples"), { recursive: true });
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, ".ydk", "graph.yaml"), GRAPH_YAML, "utf8");
+  await writeFile(path.join(root, ".ydk", "anchors.yaml"), ANCHORS_YAML, "utf8");
+  await writeFile(path.join(root, "docs", "examples", "direct-cli.md"), "# Direct CLI\n", "utf8");
+  await writeFile(path.join(root, "src", "cli.ts"), "export {};\n", "utf8");
+
+  return root;
+}
+
+async function request(root: string, url: string): Promise<CapturedResponse> {
   const server = createProjectServer({ root });
   const handler = server.listeners("request")[0] as (
     request: IncomingMessage,
     response: ServerResponse,
   ) => Promise<void>;
-  let statusCode: number | undefined;
-  let headers: Record<string, string> | undefined;
-  let body: Buffer | undefined;
+  const captured: CapturedResponse = { status: 0, headers: {}, body: "" };
   const response = {
-    writeHead(status: number, responseHeaders: Record<string, string>) {
-      statusCode = status;
-      headers = responseHeaders;
+    writeHead(status: number, headers: Record<string, string>) {
+      captured.status = status;
+      captured.headers = headers;
       return this;
     },
-    end(content?: Buffer) {
-      body = content;
+    end(content?: Buffer | string) {
+      captured.body = content === undefined ? "" : content.toString();
       return this;
     },
   } as unknown as ServerResponse;
 
-  await handler(
-    { url: "/vendor/vue.esm-browser.prod.js" } as IncomingMessage,
-    response,
-  );
+  await handler({ url } as IncomingMessage, response);
 
-  assert.equal(statusCode, 200);
-  assert.match(headers?.["content-type"] ?? "", /^text\/javascript/);
-  assert.match(body?.toString("utf8") ?? "", /createApp/);
+  return captured;
+}
+
+test("serves the browser runtime when inspecting an external project", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ydk-external-project-"));
+
+  const response = await request(root, "/vendor/vue.esm-browser.prod.js");
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"] ?? "", /^text\/javascript/);
+  assert.match(response.body, /createApp/);
+});
+
+test("explains an artifact the way ydk why does", async () => {
+  const root = await createServedProject();
+
+  const response = await request(root, "/api/why?path=docs/examples/direct-cli.md");
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"] ?? "", /^application\/json/);
+  assert.deepEqual(JSON.parse(response.body), {
+    query: "docs/examples/direct-cli.md",
+    anchor: {
+      display: "docs/examples",
+      kind: "directory",
+      reason: "Explores how the purpose graph could be used.",
+      node: "C-001",
+    },
+    trace: ["C-001", "M-001"],
+  });
+});
+
+test("answers a path no anchor covers with 404", async () => {
+  const root = await createServedProject();
+
+  const response = await request(root, "/api/why?path=src/cli.ts");
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(JSON.parse(response.body), {
+    query: "src/cli.ts",
+    error: "No explanation found for src/cli.ts",
+  });
+});
+
+test("answers a missing or empty path with 400", async () => {
+  const root = await createServedProject();
+
+  for (const url of ["/api/why", "/api/why?path=", "/api/why?path=%20"]) {
+    const response = await request(root, url);
+
+    assert.equal(response.status, 400, `expected ${url} to be rejected`);
+    assert.match(JSON.parse(response.body).error, /path/u);
+  }
+});
+
+test("exposes the files no anchor covers to the browser", async () => {
+  const view = createProjectView(await loadProject(await createServedProject()));
+
+  assert.deepEqual(view.coverage.unanchoredFiles, ["src/cli.ts"]);
+  assert.equal(view.coverage.anchoredFiles + view.coverage.unanchoredFiles.length, view.coverage.totalFiles);
 });
 
 test("presents a url anchor as a live product surface", async () => {

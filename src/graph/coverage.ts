@@ -37,6 +37,7 @@ export type CoverageReport = {
   unanchoredNodes: Array<{ id: NodeId; type: string; title: string }>;
   totalFiles: number;
   anchoredFiles: number;
+  unanchoredFiles: string[];
   directories: DirectoryCoverage[];
   staleAnchors: StaleAnchor[];
   assessedNodes: AssessedNode[];
@@ -156,6 +157,7 @@ export function computeCoverage(
     unanchoredNodes,
     totalFiles: files.length,
     anchoredFiles: anchoredFiles.size,
+    unanchoredFiles: files.filter((file) => !anchoredFiles.has(file)).sort(comparePaths),
     directories: buildDirectoryTree(files, anchoredFiles),
     staleAnchors,
     assessedNodes,

@@ -20,6 +20,7 @@ const METER_FILL_CELL = "█";
 const METER_TRACK_CELL = "░";
 const METER_WARNING_PERCENT = 70;
 const UNANCHORED_PREVIEW_LIMIT = 3;
+const ROOT_DIRECTORY_LABEL = ".";
 const COVERAGE_LABELS = ["nodes anchored", "files anchored", "stale anchors", "nodes assessed"];
 const MAX_SCORE = 4;
 /** Below this a node's anchored artifacts do not yet fulfill what it claims. */
@@ -288,10 +289,12 @@ function countAnchors(anchors: Anchor[]): Map<NodeId, number> {
 
 export function renderWhyHeader(result: WhyResult, target: string, options: RenderOptions): string {
   const palette = createPalette(options.color);
-  const lines = [palette.target(result.displayTarget)];
+  const lines = [palette.target(target)];
 
-  if (result.matchedPattern) {
-    lines.push(palette.meta(`  matched pattern for ${target}`));
+  // A directory, pattern, or route anchor covers more than the queried artifact,
+  // so the header has to name the anchor that actually matched.
+  if (result.displayTarget !== target) {
+    lines.push(palette.meta(`  matched via ${result.anchor.target.kind} ${result.displayTarget}`));
   }
 
   lines.push(`${palette.meta("  anchored to ")}${palette.id(result.anchor.node)}`);
@@ -460,6 +463,7 @@ export function renderCoverageSummary(report: CoverageReport, options: RenderOpt
 }
 
 export function renderCoverage(report: CoverageReport, options: RenderOptions): string {
+  const palette = createPalette(options.color);
   const preview = renderUnanchoredPreview(report, options);
   const assessed = renderAssessedNodes(report, options);
   const lines = [renderCoverageSummary(report, options)];
@@ -470,6 +474,12 @@ export function renderCoverage(report: CoverageReport, options: RenderOptions): 
 
   if (assessed) {
     lines.push("", assessed);
+  }
+
+  // The summary counts the unanchored files; only this pointer names them.
+  if (report.unanchoredFiles.length > 0) {
+    const count = plural(report.unanchoredFiles.length, "file");
+    lines.push("", palette.meta(`  ${count} unanchored · ydk coverage --unanchored-files`));
   }
 
   return lines.join("\n");
@@ -532,6 +542,42 @@ export function renderUnanchoredNodes(report: CoverageReport, options: RenderOpt
   }
 
   return [palette.meta("  unanchored nodes"), ...unanchoredLines(report.unanchoredNodes, options)].join("\n");
+}
+
+export function renderUnanchoredFiles(report: CoverageReport, options: RenderOptions): string {
+  const palette = createPalette(options.color);
+
+  if (report.unanchoredFiles.length === 0) {
+    return palette.meta("  no unanchored files");
+  }
+
+  const groups = groupFilesByDirectory(report.unanchoredFiles);
+  const pathWidth = Math.max(...groups.map((group) => group.directory.length));
+
+  return [
+    palette.meta("  unanchored files"),
+    ...groups.flatMap((group) => [
+      `    ${group.directory.padEnd(pathWidth)}  ${palette.meta(plural(group.files.length, "file"))}`,
+      ...group.files.map((file) => `      ${file}`),
+    ]),
+  ].join("\n");
+}
+
+/** Keeps each directory heading once, with the file names it holds beneath it. */
+function groupFilesByDirectory(files: string[]): Array<{ directory: string; files: string[] }> {
+  const groups = new Map<string, string[]>();
+
+  for (const file of files) {
+    const separator = file.lastIndexOf("/");
+    const directory = separator < 0 ? ROOT_DIRECTORY_LABEL : `${file.slice(0, separator)}/`;
+    const names = groups.get(directory) ?? [];
+    names.push(file.slice(separator + 1));
+    groups.set(directory, names);
+  }
+
+  return [...groups.entries()]
+    .map(([directory, names]) => ({ directory, files: names }))
+    .sort((left, right) => (left.directory < right.directory ? -1 : 1));
 }
 
 export function renderStaleAnchors(report: CoverageReport, options: RenderOptions): string {
