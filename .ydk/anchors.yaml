@@ -169,10 +169,10 @@ anchors:
       kind: url
       value: /#/map
     node: F-004
-    reason: Map page that shows the whole purpose graph as one navigable picture.
+    reason: The one web page, showing the whole purpose graph as a navigable picture.
 
   - target:
       kind: url
-      value: /#/coverage
-    node: F-003
-    reason: Coverage page reporting how completely the repo maps to the purpose graph.
+      value: /#/map
+    node: F-005
+    reason: Map detail section reports each assessed node's findings inline.

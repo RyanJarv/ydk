@@ -200,7 +200,7 @@ test("does not resolve a url anchor from an unrelated route", async () => {
     },
   ];
 
-  assert.equal(resolveWhy(project, "/#/coverage"), null);
+  assert.equal(resolveWhy(project, "/#/settings"), null);
 });
 
 test("validates url anchors for route syntax without touching disk", async () => {

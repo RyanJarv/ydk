@@ -88,22 +88,21 @@ Given a repo artifact, return a valid explanation path from that artifact to the
 npm run ydk -- serve
 ```
 
-The explorer loads `.ydk/graph.yaml` and `.ydk/anchors.yaml` and splits them
-across two tabs. Each tab is a hash route, so any view is linkable:
+The explorer is one page: the map. It loads `.ydk/graph.yaml`,
+`.ydk/anchors.yaml`, and `.ydk/assessments.yaml` and draws the graph as layered
+columns, one per node type. Each node carries its assessment score as a coloured
+edge, so drift across the whole project is visible at a glance. Selecting a node
+highlights its path to the mission, dims everything off it, and opens a detail
+section below the map with the node's statement, its anchored artifacts, and
+both directions of its assessment findings.
 
-- **Map** (`#/map`) — the graph as layered columns, one per node type. Selecting
-  a node highlights its path to the mission, dims everything off it, and opens a
-  panel with the node's statement and anchored artifacts. `#/map/F-001` opens
-  straight to a node.
-- **Coverage** (`#/coverage`) — the same numbers `ydk coverage` prints, as stat
-  tiles, a per-directory breakdown, and lists of unanchored nodes, stale
-  anchors, and assessed nodes with their findings.
+The selected node is a hash route, so any node is linkable: `#/map/F-001` opens
+straight to it.
 
-Asking why one artifact exists is the CLI's job: `ydk why <path>`.
+Repo-level coverage stays in the terminal, where `ydk coverage` prints it, and
+asking why one artifact exists is also the CLI's job: `ydk why <path>`.
 
-![ydk project explorer, Map view](./docs/assets/ydk-serve-map.png)
-
-![ydk project explorer, Coverage view](./docs/assets/ydk-serve-coverage.png)
+![ydk project explorer](./docs/assets/ydk-serve-map.png)
 
 ## Possible Direction Examples
 

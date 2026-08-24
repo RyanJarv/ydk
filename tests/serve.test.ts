@@ -115,11 +115,29 @@ test("no longer answers artifact why queries", async () => {
   assert.equal(response.body, "Not found");
 });
 
-test("exposes the files no anchor covers to the browser", async () => {
+// Repo-level coverage is the CLI's report; the browser only needs the headline counts.
+test("summarises anchoring for the map header without shipping the coverage report", async () => {
   const view = createProjectView(await loadProject(await createServedProject()));
 
-  assert.deepEqual(view.coverage.unanchoredFiles, ["src/cli.ts"]);
-  assert.equal(view.coverage.anchoredFiles + view.coverage.unanchoredFiles.length, view.coverage.totalFiles);
+  assert.equal(view.stats.anchorableNodeCount, 1);
+  assert.equal(view.stats.anchoredNodeCount, 1);
+  assert.equal("coverage" in view, false);
+});
+
+test("says why a stale anchor no longer resolves", async () => {
+  const root = await createServedProject();
+  const project = await loadProject(root);
+  project.anchors.anchors.push({
+    target: { kind: "file", value: "src/missing.ts" },
+    node: "C-001",
+    reason: "Names a file that was deleted.",
+  });
+
+  const view = createProjectView(project);
+  const anchor = view.nodes.find((node) => node.id === "C-001")?.anchors.at(-1);
+
+  assert.equal(anchor?.stale, true);
+  assert.equal(anchor?.staleReason, "file not found");
 });
 
 test("presents a url anchor as a live product surface", async () => {
@@ -158,7 +176,6 @@ test("presents a url anchor as a live product surface", async () => {
     },
   ]);
   assert.equal(view.stats.anchoredNodeCount, 1);
-  assert.deepEqual(view.coverage.staleAnchors, []);
 });
 
 test("exposes an assessment on the node it judges", async () => {
@@ -209,8 +226,6 @@ test("exposes an assessment on the node it judges", async () => {
     undeclared: [],
   });
   assert.equal(view.nodes.find((node) => node.id === "F-002")?.assessment, undefined);
-  assert.deepEqual(view.coverage.assessedNodes, [
-    { id: "F-001", type: "feature", title: "Feature", score: 2, assessed: "2026-08-23" },
-  ]);
-  assert.equal(view.coverage.averageScore, 2);
+  assert.equal(view.stats.assessedNodeCount, 1);
+  assert.equal(view.stats.averageScore, 2);
 });

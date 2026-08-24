@@ -1,9 +1,4 @@
-import {
-  computeAnchorStatus,
-  computeCoverage,
-  listProjectFiles,
-  type CoverageReport,
-} from "../graph/coverage.ts";
+import { computeAnchorStatus, computeCoverage, listProjectFiles } from "../graph/coverage.ts";
 import { formatAnchorTarget } from "../graph/targetResolver.ts";
 import { allTracesToRoot } from "../graph/trace.ts";
 import type { Anchor, Assessment, GraphNode, NodeId, YdkProject } from "../graph/types.ts";
@@ -14,6 +9,8 @@ export type ProjectViewAnchor = {
   reason: string;
   matchCount?: number;
   stale?: boolean;
+  /** Why the target no longer resolves, carried so the map can say it in place. */
+  staleReason?: string;
 };
 
 export type ProjectViewAssessment = {
@@ -45,8 +42,9 @@ export type ProjectView = {
     anchorCount: number;
     anchorableNodeCount: number;
     anchoredNodeCount: number;
+    assessedNodeCount: number;
+    averageScore: number | null;
   };
-  coverage: CoverageReport;
 };
 
 export function createProjectView(project: YdkProject): ProjectView {
@@ -79,6 +77,7 @@ export function createProjectView(project: YdkProject): ProjectView {
           reason: anchor.reason,
           ...(status.matchCount === undefined ? {} : { matchCount: status.matchCount }),
           stale: status.stale === true,
+          ...(status.stale === true && status.reason ? { staleReason: status.reason } : {}),
         },
       ];
     }),
@@ -115,8 +114,9 @@ export function createProjectView(project: YdkProject): ProjectView {
       anchorCount: project.anchors.anchors.length,
       anchorableNodeCount: coverage.anchorableNodeCount,
       anchoredNodeCount: coverage.anchoredNodeCount,
+      assessedNodeCount: coverage.assessedNodes.length,
+      averageScore: coverage.averageScore,
     },
-    coverage,
   };
 }
 
