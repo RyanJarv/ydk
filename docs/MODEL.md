@@ -6,6 +6,41 @@ The model is intentionally not configurable in the initial version. Each repo
 configures its own purpose graph and artifact anchors, but not the ontology or
 validation rules used by `ydk`.
 
+## Two Layers, One Coupling
+
+The model is best read as two graphs joined by a coupling — what network theory
+calls a two-layer graph and requirements engineering calls a traceability
+graph.
+
+- The **purpose layer** is `graph.yaml`: authored, validated, a DAG of
+  mission, outcome, capability, and feature nodes joined by `supports` edges.
+  It is the desired state of the project.
+- The **implementation layer** is the repo itself: discovered rather than
+  authored. `ydk` gives it no edges of its own — files, directories, package
+  scripts, and product routes are a vertex set read from the working tree.
+- **Anchors** are the inter-layer edges. Each anchor joins one artifact to one
+  purpose node, and no anchor ever runs within a layer, which makes the anchor
+  set a bipartite graph between the two.
+
+The layers earn different treatment. The purpose layer carries authored
+invariants, enforced by `ydk validate`: one mission, no cycles, every node
+reaching the mission. The implementation layer's truth is the filesystem, so
+nothing about it is declared or validated on its own. Keeping artifacts out of
+`graph.yaml` — anchored rather than added as nodes — is what keeps each
+layer's rules coherent.
+
+The derived concepts all live on the coupling rather than inside either layer.
+Coverage counts vertices with no inter-layer edge, on each side: unanchored
+nodes and unanchored files. A stale anchor is an inter-layer edge whose
+implementation endpoint is gone. An assessment is a judgment recorded against
+the coupling: how well the artifacts on one end fulfill the node on the other.
+`ydk why` crosses the coupling once, then walks the purpose layer to the
+mission.
+
+The separation also leaves room to grow. If the implementation layer ever
+gains edges of its own — imports, containment, call relationships — they land
+in that layer without touching the purpose model or the anchor format.
+
 ## Built-In Node Types
 
 `ydk` supports four node types:
