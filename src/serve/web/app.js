@@ -26,11 +26,17 @@ const DEFAULT_TREE_DEPTH = 2;
 const MAX_SCORE = 4;
 /** Below this a node's anchored artifacts do not yet fulfill what it claims. */
 const SCORE_WARNING_LEVEL = 3;
+/** At or below this the anchors barely serve the claim at all. */
+const SCORE_DANGER_LEVEL = 1;
+/** Below this many anchors a flat list reads better than directory groups. */
+const ANCHOR_GROUP_THRESHOLD = 5;
+/** Keeps a keystroke from becoming a request until typing settles. */
+const WHY_DEBOUNCE_MS = 250;
 
 const NODE_SIZES = {
   mission: { width: 270, height: 100 },
   outcome: { width: 290, height: 92 },
-  capability: { width: 290, height: 66 },
+  capability: { width: 290, height: 72 },
   feature: { width: 260, height: 44 },
 };
 const FALLBACK_SIZE = { width: 270, height: 66 };
@@ -64,8 +70,41 @@ function scoreLabel(score) {
   return "score " + score + "/" + MAX_SCORE;
 }
 
+/** Compact form for places too narrow for the word, such as a map chip. */
+function scoreBadge(score) {
+  return (score === null || score === undefined ? "–" : score) + "/" + MAX_SCORE;
+}
+
 function scoreTone(score) {
+  if (score === null || score === undefined) return { unassessed: true };
+  if (score <= SCORE_DANGER_LEVEL) return { danger: true };
   return { warn: score < SCORE_WARNING_LEVEL };
+}
+
+function anchorCountLabel(count) {
+  if (count === 0) return "no anchors";
+  return count + (count === 1 ? " anchor" : " anchors");
+}
+
+/** A query worth asking the resolver about: one token that reads like a path. */
+function looksLikePath(query) {
+  if (query.length < 3 || /\s/u.test(query)) return false;
+  return query.includes("/") || /\.[A-Za-z0-9]+$/u.test(query);
+}
+
+/** Same directory grouping the CLI prints for `ydk coverage --unanchored-files`. */
+function groupFilesByDirectory(files) {
+  const groups = new Map();
+  for (const file of files ?? []) {
+    const separator = file.lastIndexOf("/");
+    const directory = separator < 0 ? "." : file.slice(0, separator + 1);
+    const names = groups.get(directory) ?? [];
+    names.push(file.slice(separator + 1));
+    groups.set(directory, names);
+  }
+  return [...groups.entries()]
+    .map(([directory, names]) => ({ directory, files: names }))
+    .sort((left, right) => (left.directory < right.directory ? -1 : 1));
 }
 
 function compareNodes(left, right) {
@@ -421,6 +460,26 @@ const OutlineNode = {
   `,
 };
 
+const AnchorCard = {
+  name: "AnchorCard",
+  props: {
+    anchor: { type: Object, required: true },
+    staleReason: { type: String, default: "" },
+  },
+  template: `
+    <article class="artifact">
+      <div>
+        <span class="kind">{{ anchor.kind }}</span>
+        <strong v-if="anchor.kind === 'url'"><a :href="anchor.display">{{ anchor.display }}</a></strong>
+        <strong v-else>{{ anchor.display }}</strong>
+        <span v-if="anchor.matchCount !== undefined" class="meta">matches {{ anchor.matchCount }} files</span>
+      </div>
+      <p>{{ anchor.reason }}</p>
+      <p v-if="anchor.stale" class="stale-note">Stale &mdash; {{ staleReason }}</p>
+    </article>
+  `,
+};
+
 const CoverageDirectory = {
   name: "CoverageDirectory",
   props: { dir: { type: Object, required: true }, depth: { type: Number, default: 0 } },
@@ -475,13 +534,15 @@ const MapView = {
     layout: { type: Object, required: true },
     highlight: { type: Object, required: true },
     selectedId: { type: String, default: null },
-    summaries: { type: Map, required: true },
+    meta: { type: Map, required: true },
   },
   emits: ["select", "clear"],
-  setup(props) {
+  setup(props, { emit }) {
     const stage = ref(null);
     const stageSize = ref({ width: 0, height: 0 });
     const userScale = ref(null);
+    const filter = ref("");
+    const chips = new Map();
     let observer = null;
 
     onMounted(() => {
@@ -516,13 +577,85 @@ const MapView = {
       userScale.value = null;
     }
 
-    function nodeClass(id) {
+    function matchesFilter(node) {
+      const query = filter.value.trim().toLowerCase();
+      if (!query) return true;
+      return (node.id + " " + node.title).toLowerCase().includes(query);
+    }
+
+    function nodeClass(node) {
       const highlight = props.highlight;
+      const id = node.id;
+      const offPath = highlight.active && !highlight.pathNodes.has(id) && !highlight.subtree.has(id);
       return {
         selected: id === props.selectedId,
         "on-path": highlight.active && id !== props.selectedId && highlight.pathNodes.has(id),
-        dimmed: highlight.active && !highlight.pathNodes.has(id) && !highlight.subtree.has(id),
+        dimmed: offPath || !matchesFilter(node),
       };
+    }
+
+    function nodeLabel(box) {
+      const info = props.meta.get(box.node.id);
+      const parts = [box.node.type, box.node.id, box.node.title];
+      if (info?.anchorable) {
+        parts.push(anchorCountLabel(info.anchorCount));
+        parts.push(
+          info.score === null ? "not assessed" : "score " + info.score + " of " + MAX_SCORE,
+        );
+      }
+      return parts.join(", ");
+    }
+
+    /* ------------------------------------------------------ keyboard move */
+
+    // Vue clears a function ref with null on re-render; the graph never loses a
+    // node once loaded, so keeping the last element is both safe and simpler.
+    function setChip(id, element) {
+      if (element) chips.set(id, element);
+    }
+
+    function moveFocus(fromId, direction) {
+      const boxes = props.layout.nodes;
+      const current = boxes.find((box) => box.node.id === fromId);
+      if (!current) return;
+
+      let candidates;
+      if (direction === "up" || direction === "down") {
+        const forward = direction === "down";
+        candidates = boxes
+          .filter((box) => box.x === current.x && (forward ? box.y > current.y : box.y < current.y))
+          .sort((left, right) => (forward ? left.y - right.y : right.y - left.y));
+      } else {
+        const columns = [...new Set(boxes.map((box) => box.x))].sort((left, right) => left - right);
+        const targetX = columns[columns.indexOf(current.x) + (direction === "right" ? 1 : -1)];
+        if (targetX === undefined) return;
+        const centre = current.y + current.height / 2;
+        candidates = boxes
+          .filter((box) => box.x === targetX)
+          .sort(
+            (left, right) =>
+              Math.abs(left.y + left.height / 2 - centre) - Math.abs(right.y + right.height / 2 - centre),
+          );
+      }
+
+      chips.get(candidates[0]?.node.id)?.focus();
+    }
+
+    function onNodeKey(event, id) {
+      const moves = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+      if (moves[event.key]) {
+        event.preventDefault();
+        moveFocus(id, moves[event.key]);
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        emit("select", id);
+        return;
+      }
+      if (event.key === "Escape") {
+        emit("clear");
+      }
     }
 
     function edgeClass(edge) {
@@ -534,11 +667,33 @@ const MapView = {
       return { dimmed: !inSubtree };
     }
 
-    return { edgeClass, fit, nodeClass, scale, stage, zoomBy };
+    return {
+      edgeClass,
+      filter,
+      fit,
+      nodeClass,
+      nodeLabel,
+      onNodeKey,
+      scale,
+      scoreBadge,
+      scoreTone,
+      setChip,
+      stage,
+      zoomBy,
+    };
   },
   template: `
     <section class="card map-card">
       <div class="map-toolbar">
+        <div class="map-filter">
+          <input
+            v-model="filter"
+            type="search"
+            placeholder="Find a node"
+            aria-label="Filter map nodes by id or title"
+            @keydown.esc.prevent="filter = ''"
+          >
+        </div>
         <div class="legend">
           <span>
             <svg width="22" height="8" viewBox="0 0 22 8" aria-hidden="true"><path d="M1 4 H21" stroke="#2e7d5b" stroke-width="2.5" fill="none" stroke-linecap="round"></path></svg>
@@ -570,6 +725,11 @@ const MapView = {
           </div>
         </div>
       </div>
+
+      <p class="map-hint">
+        <kbd>&#8592;</kbd><kbd>&#8593;</kbd><kbd>&#8594;</kbd><kbd>&#8595;</kbd> move between nodes
+        &middot; <kbd>Enter</kbd> open the node &middot; <kbd>Esc</kbd> clear focus
+      </p>
 
       <div
         ref="stage"
@@ -605,14 +765,36 @@ const MapView = {
             :height="box.height"
           >
             <div
+              :ref="(element) => setChip(box.node.id, element)"
               class="map-node"
-              :class="[box.node.type, nodeClass(box.node.id)]"
+              :class="[box.node.type, nodeClass(box.node)]"
+              role="button"
+              tabindex="0"
+              :aria-label="nodeLabel(box)"
               :title="box.node.id + ' ' + box.node.title"
               @click="$emit('select', box.node.id)"
+              @keydown="onNodeKey($event, box.node.id)"
             >
-              <span class="map-node-id">{{ box.node.id }}</span>
-              <span class="map-node-title">{{ box.node.title }}</span>
-              <span v-if="summaries.get(box.node.id)" class="map-node-meta">{{ summaries.get(box.node.id) }}</span>
+              <template v-if="meta.get(box.node.id).anchorable">
+                <span class="map-node-head">
+                  <span class="map-node-id">{{ box.node.id }}</span>
+                  <span
+                    class="map-node-anchors"
+                    :class="{ warn: meta.get(box.node.id).anchorCount === 0 }"
+                  >{{ meta.get(box.node.id).countText }}</span>
+                  <span class="badge map-node-score" :class="scoreTone(meta.get(box.node.id).score)">
+                    {{ scoreBadge(meta.get(box.node.id).score) }}
+                  </span>
+                </span>
+                <span class="map-node-title">{{ box.node.title }}</span>
+              </template>
+              <template v-else>
+                <span class="map-node-id">{{ box.node.id }}</span>
+                <span class="map-node-title">{{ box.node.title }}</span>
+                <span v-if="meta.get(box.node.id).summary" class="map-node-meta">
+                  {{ meta.get(box.node.id).summary }}
+                </span>
+              </template>
             </div>
           </foreignObject>
         </svg>
@@ -876,6 +1058,11 @@ const App = {
 
     const anchorGroups = computed(() => groupAnchorsByDirectory(selectedNode.value?.anchors ?? []));
 
+    // Few enough anchors and the directory headings cost more than they explain.
+    const anchorsGrouped = computed(
+      () => (selectedNode.value?.anchors ?? []).length > ANCHOR_GROUP_THRESHOLD,
+    );
+
     function isGroupOpen(directory) {
       const key = selectedId.value + "::" + directory;
       const override = openAnchorGroups.value[key];
@@ -893,6 +1080,72 @@ const App = {
       return directory === "." ? "(repository root)" : directory;
     }
 
+    /* ------------------------------------------------------ why resolution */
+
+    const whyQuery = ref("");
+    const whyView = ref(null);
+    const whyMissing = ref(false);
+    let whyTimer = null;
+    let whyRequest = 0;
+
+    function forgetWhy() {
+      whyQuery.value = "";
+      whyView.value = null;
+      whyMissing.value = false;
+    }
+
+    /**
+     * A path the literal filter cannot place still has an explanation: pattern
+     * and directory anchors cover files nothing names. Asking `/api/why` runs
+     * the same resolver as the CLI, so the browser answers what the terminal would.
+     */
+    async function resolveWhy(query) {
+      const request = ++whyRequest;
+      try {
+        const response = await fetch("/api/why?path=" + encodeURIComponent(query));
+        if (request !== whyRequest) return;
+        if (response.ok) {
+          whyQuery.value = query;
+          whyView.value = await response.json();
+          whyMissing.value = false;
+          return;
+        }
+        // A miss is the normal answer for a path nothing anchors, not a failure.
+        whyQuery.value = query;
+        whyView.value = null;
+        whyMissing.value = response.status === 404;
+      } catch {
+        if (request === whyRequest) forgetWhy();
+      }
+    }
+
+    watch([search, matchedIds], () => {
+      const query = search.value.trim();
+      const matches = matchedIds.value;
+      if (whyTimer) clearTimeout(whyTimer);
+
+      if (!looksLikePath(query) || !matches || matches.size > 0) {
+        whyRequest += 1;
+        forgetWhy();
+        return;
+      }
+      if (whyQuery.value === query) return;
+
+      whyTimer = setTimeout(() => resolveWhy(query), WHY_DEBOUNCE_MS);
+    });
+
+    const whyResolution = computed(() => {
+      const view = whyView.value;
+      if (!view) return null;
+      return {
+        anchor: view.anchor,
+        node: nodeById.value.get(view.anchor.node) ?? null,
+        query: view.query,
+        // Only worth naming when the anchor is not the query typed verbatim.
+        via: view.anchor.display === view.query ? null : view.anchor.display,
+      };
+    });
+
     const visibleAnchors = computed(() => {
       const query = search.value.trim().toLowerCase();
       if (!query) return anchors.value;
@@ -905,18 +1158,37 @@ const App = {
 
     const mapLayout = computed(() => layoutGraph(nodes.value, edges.value));
 
-    const mapSummaries = computed(() => {
-      const summaries = new Map();
+    /**
+     * What each map chip shows beyond its title: a rollup for the tiers that
+     * only aggregate, and the node's own score and anchor count for the tiers
+     * that can be anchored and assessed.
+     */
+    const mapNodeMeta = computed(() => {
+      const meta = new Map();
       for (const node of nodes.value) {
-        if (node.type !== "mission" && node.type !== "outcome") continue;
         const stat = subtreeStats.value.get(node.id);
-        if (!stat || !stat.childCount) continue;
-        const childNode = nodeById.value.get((children.value.get(node.id) ?? [])[0]);
-        const nouns = CHILD_NOUNS[childNode?.type] ?? ["child", "children"];
-        const noun = stat.childCount === 1 ? nouns[0] : nouns[1];
-        summaries.set(node.id, stat.childCount + " " + noun + " · " + stat.anchorTotal + " anchors");
+        const anchorCount = node.anchors?.length ?? 0;
+        const anchorable = ANCHORABLE_TYPES.has(node.type);
+
+        let summary = null;
+        if ((node.type === "mission" || node.type === "outcome") && stat?.childCount) {
+          const childNode = nodeById.value.get((children.value.get(node.id) ?? [])[0]);
+          const nouns = CHILD_NOUNS[childNode?.type] ?? ["child", "children"];
+          const noun = stat.childCount === 1 ? nouns[0] : nouns[1];
+          summary = stat.childCount + " " + noun + " · " + stat.anchorTotal + " anchors";
+        }
+
+        meta.set(node.id, {
+          anchorable,
+          anchorCount,
+          // A feature chip is one narrow row, so the word only survives where it fits.
+          countText:
+            anchorCount === 0 || node.type !== "feature" ? anchorCountLabel(anchorCount) : String(anchorCount),
+          score: node.assessment ? node.assessment.score : null,
+          summary,
+        });
       }
-      return summaries;
+      return meta;
     });
 
     const mapHighlight = computed(() => {
@@ -986,7 +1258,24 @@ const App = {
       ratio: percent(coverage.value.anchoredFiles, coverage.value.totalFiles),
     }));
 
-    const assessedNodes = computed(() => coverage.value.assessedNodes ?? []);
+    const unanchoredFileGroups = computed(() => groupFilesByDirectory(coverage.value.unanchoredFiles));
+
+    function showUnanchoredFiles() {
+      document.getElementById("unanchored-files")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    /** Worst first: the point of the card is what needs attention. */
+    const assessedNodes = computed(() =>
+      (coverage.value.assessedNodes ?? [])
+        .map((node) => {
+          const assessment = nodeById.value.get(node.id)?.assessment;
+          const findings = [];
+          if (assessment?.unfulfilled.length) findings.push(assessment.unfulfilled.length + " unfulfilled");
+          if (assessment?.undeclared.length) findings.push(assessment.undeclared.length + " undeclared");
+          return { ...node, findings: findings.join(" · ") };
+        })
+        .sort((left, right) => left.score - right.score),
+    );
 
     const assessmentSummary = computed(() => {
       if (!assessedNodes.value.length) return null;
@@ -1024,6 +1313,7 @@ const App = {
       anchorGroups,
       anchorKinds,
       anchoredPercent,
+      anchorsGrouped,
       assessedNodes,
       assessmentSummary,
       clearFocus,
@@ -1036,7 +1326,7 @@ const App = {
       loading,
       mapHighlight,
       mapLayout,
-      mapSummaries,
+      mapNodeMeta,
       meterTone,
       nodeCoverage,
       nodes,
@@ -1045,6 +1335,7 @@ const App = {
       outlineEmpty,
       primaryTrace,
       project,
+      scoreBadge,
       scoreLabel,
       scoreTone,
       search,
@@ -1058,14 +1349,19 @@ const App = {
       setView,
       showAllPaths,
       showIndex,
+      showUnanchoredFiles,
       staleReason,
       stats,
       toggleAll,
       toggleGroup,
+      unanchoredFileGroups,
       unanchoredOnly,
       validation,
       view,
       visibleAnchors,
+      whyMissing,
+      whyQuery,
+      whyResolution,
     };
   },
   template: `
@@ -1112,7 +1408,7 @@ const App = {
               :layout="mapLayout"
               :highlight="mapHighlight"
               :selected-id="selectedId"
-              :summaries="mapSummaries"
+              :meta="mapNodeMeta"
               @select="selectNode"
               @clear="clearFocus"
             />
@@ -1125,6 +1421,36 @@ const App = {
                 <div class="search">
                   <input v-model="search" type="search" placeholder="Search nodes and artifacts" aria-label="Search nodes and artifacts">
                 </div>
+
+                <div v-if="whyResolution" class="resolution">
+                  <div class="resolution-head">
+                    <span class="resolution-label">Resolved artifact</span>
+                    <span class="resolution-query">{{ whyResolution.query }}</span>
+                  </div>
+                  <p v-if="whyResolution.via" class="resolution-via">
+                    matched via <span class="kind">{{ whyResolution.anchor.kind }}</span>
+                    <strong>{{ whyResolution.via }}</strong>
+                  </p>
+                  <button
+                    v-if="whyResolution.node"
+                    type="button"
+                    class="resolution-node"
+                    @click="selectNode(whyResolution.node.id)"
+                  >
+                    <span class="node-id">{{ whyResolution.node.id }}</span>
+                    <span class="list-title">{{ whyResolution.node.title }}</span>
+                    <span
+                      v-if="whyResolution.node.assessment"
+                      class="badge"
+                      :class="scoreTone(whyResolution.node.assessment.score)"
+                    >{{ scoreBadge(whyResolution.node.assessment.score) }}</span>
+                  </button>
+                  <p class="muted resolution-reason">{{ whyResolution.anchor.reason }}</p>
+                </div>
+
+                <p v-else-if="whyMissing" class="muted resolution-miss">
+                  No explanation found for <strong>{{ whyQuery }}</strong> &mdash; no anchor reaches it.
+                </p>
 
                 <div class="filters">
                   <button
@@ -1174,6 +1500,50 @@ const App = {
                 </div>
 
                 <p v-if="selectedNode.statement" class="statement">{{ selectedNode.statement }}</p>
+
+                <!-- Anchors lead: everything below explains the artifacts named here. -->
+                <section class="artifacts">
+                  <div class="section-head">
+                    <h3>Anchored Artifacts</h3>
+                    <span v-if="selectedNode.anchors.length" class="muted">
+                      {{ selectedNode.anchors.length }}<template v-if="anchorsGrouped">
+                        across {{ anchorGroups.length }} {{ anchorGroups.length === 1 ? 'directory' : 'directories' }}
+                      </template><template v-else>
+                        {{ selectedNode.anchors.length === 1 ? 'anchor' : 'anchors' }}
+                      </template>
+                    </span>
+                    <span class="muted section-note">The artifacts this node claims.</span>
+                  </div>
+
+                  <template v-if="anchorsGrouped">
+                    <div v-for="group in anchorGroups" :key="group.directory" class="artifact-group">
+                      <button type="button" class="group-header" @click="toggleGroup(group.directory)">
+                        <chevron :open="isGroupOpen(group.directory)" />
+                        <span>{{ groupLabel(group.directory) }}</span>
+                        <span class="badge">{{ group.anchors.length }}</span>
+                      </button>
+                      <div v-if="isGroupOpen(group.directory)" class="group-body">
+                        <anchor-card
+                          v-for="anchor in group.anchors"
+                          :key="anchor.display"
+                          :anchor="anchor"
+                          :stale-reason="anchor.stale ? staleReason(anchor) : ''"
+                        />
+                      </div>
+                    </div>
+                  </template>
+
+                  <div v-else-if="selectedNode.anchors.length" class="group-body flat">
+                    <anchor-card
+                      v-for="anchor in selectedNode.anchors"
+                      :key="anchor.display"
+                      :anchor="anchor"
+                      :stale-reason="anchor.stale ? staleReason(anchor) : ''"
+                    />
+                  </div>
+
+                  <p v-else class="muted">No artifacts anchor directly to this node.</p>
+                </section>
 
                 <section class="trace">
                   <h3>Why Path</h3>
@@ -1238,38 +1608,6 @@ const App = {
                     </button>
                     <p v-if="!selectedParents.length" class="muted">This is the top-level mission.</p>
                   </div>
-                </section>
-
-                <section class="artifacts">
-                  <div class="section-head">
-                    <h3>Anchored Artifacts</h3>
-                    <span v-if="selectedNode.anchors.length" class="muted">
-                      {{ selectedNode.anchors.length }} across {{ anchorGroups.length }}
-                      {{ anchorGroups.length === 1 ? 'group' : 'groups' }}
-                    </span>
-                  </div>
-
-                  <div v-for="group in anchorGroups" :key="group.directory" class="artifact-group">
-                    <button type="button" class="group-header" @click="toggleGroup(group.directory)">
-                      <chevron :open="isGroupOpen(group.directory)" />
-                      <span>{{ groupLabel(group.directory) }}</span>
-                      <span class="badge">{{ group.anchors.length }}</span>
-                    </button>
-                    <div v-if="isGroupOpen(group.directory)" class="group-body">
-                      <article v-for="anchor in group.anchors" :key="anchor.display" class="artifact">
-                        <div>
-                          <span class="kind">{{ anchor.kind }}</span>
-                          <strong v-if="anchor.kind === 'url'"><a :href="anchor.display">{{ anchor.display }}</a></strong>
-                          <strong v-else>{{ anchor.display }}</strong>
-                          <span v-if="anchor.matchCount !== undefined" class="meta">matches {{ anchor.matchCount }} files</span>
-                        </div>
-                        <p>{{ anchor.reason }}</p>
-                        <p v-if="anchor.stale" class="stale-note">Stale &mdash; {{ staleReason(anchor) }}</p>
-                      </article>
-                    </div>
-                  </div>
-
-                  <p v-if="!selectedNode.anchors.length" class="muted">No artifacts anchor directly to this node.</p>
                 </section>
 
                 <section v-if="selectedAssessment" class="assessment">
@@ -1346,6 +1684,11 @@ const App = {
                 <span class="meter" :class="meterTone(fileCoverage.ratio)">
                   <i :style="{ width: (fileCoverage.ratio === 0 ? 2 : fileCoverage.ratio) + '%' }"></i>
                 </span>
+                <span v-if="coverage.unanchoredFiles.length" class="muted">
+                  {{ coverage.unanchoredFiles.length }}
+                  {{ coverage.unanchoredFiles.length === 1 ? 'file' : 'files' }} unanchored &mdash;
+                  <button type="button" class="link-button" @click="showUnanchoredFiles()">listed below</button>
+                </span>
               </article>
               <article class="tile card">
                 <span class="tile-label">Stale anchors</span>
@@ -1362,14 +1705,42 @@ const App = {
             </section>
 
             <section class="coverage-body">
-              <div class="card coverage-tree">
-                <h3>Repository coverage</h3>
-                <coverage-directory v-for="dir in coverage.directories" :key="dir.path" :dir="dir" />
-                <p v-if="!coverage.directories.length" class="muted">No repository files were scanned.</p>
-                <p class="muted footnote">
-                  Counts include files matched by pattern and directory anchors. Ignored paths come from
-                  <strong>.ydk/ignore</strong>.
-                </p>
+              <div class="coverage-main">
+                <div class="card coverage-tree">
+                  <h3>Repository coverage</h3>
+                  <coverage-directory v-for="dir in coverage.directories" :key="dir.path" :dir="dir" />
+                  <p v-if="!coverage.directories.length" class="muted">No repository files were scanned.</p>
+                  <p class="muted footnote">
+                    Counts include files matched by pattern and directory anchors. Ignored paths come from
+                    <strong>.ydk/ignore</strong>.
+                  </p>
+                </div>
+
+                <div id="unanchored-files" class="card unanchored-files">
+                  <div class="section-head">
+                    <h3>Unanchored files</h3>
+                    <span v-if="coverage.unanchoredFiles.length" class="badge warn">
+                      {{ coverage.unanchoredFiles.length }}
+                    </span>
+                  </div>
+                  <template v-if="unanchoredFileGroups.length">
+                    <p class="muted">
+                      No anchor reaches these files. Anchor them, or list them in <strong>.ydk/ignore</strong>.
+                    </p>
+                    <div v-for="group in unanchoredFileGroups" :key="group.directory" class="file-group">
+                      <div class="file-group-head">
+                        <span class="dir-name">
+                          {{ group.directory === '.' ? '(repository root)' : group.directory }}
+                        </span>
+                        <span class="badge warn">{{ group.files.length }}</span>
+                      </div>
+                      <div class="file-names">
+                        <span v-for="file in group.files" :key="file">{{ file }}</span>
+                      </div>
+                    </div>
+                  </template>
+                  <p v-else class="muted">no unanchored files</p>
+                </div>
               </div>
 
               <div class="coverage-side">
@@ -1398,6 +1769,7 @@ const App = {
                   <div class="section-head">
                     <h3>Assessed purpose nodes</h3>
                     <span class="badge">{{ assessmentSummary.assessed }}</span>
+                    <span class="muted section-note">lowest score first</span>
                   </div>
                   <p class="muted">
                     assessed {{ assessmentSummary.assessed }} / {{ assessmentSummary.total }} anchorable nodes<template
@@ -1412,6 +1784,7 @@ const App = {
                   >
                     <span class="node-id">{{ node.id }}</span>
                     <span class="list-title">{{ node.title }}</span>
+                    <span v-if="node.findings" class="muted list-findings">{{ node.findings }}</span>
                     <span class="badge" :class="scoreTone(node.score)">{{ scoreLabel(node.score) }}</span>
                   </button>
                 </div>
@@ -1448,6 +1821,7 @@ const App = {
 };
 
 const app = createApp(App);
+app.component("anchor-card", AnchorCard);
 app.component("chevron", Chevron);
 app.component("outline-node", OutlineNode);
 app.component("coverage-directory", CoverageDirectory);
