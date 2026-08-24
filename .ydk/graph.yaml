@@ -36,11 +36,11 @@ nodes:
 
   - id: C-004
     type: capability
-    title: Measure how well implementation fulfills each node's stated purpose
+    title: Report how well implementation fulfills each node's stated purpose
 
   - id: C-005
     type: capability
-    title: Measure how coherently each node supports its parent
+    title: Report how coherently each node supports its parent
 
   - id: F-001
     type: feature
