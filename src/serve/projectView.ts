@@ -4,7 +4,6 @@ import {
   listProjectFiles,
   type CoverageReport,
 } from "../graph/coverage.ts";
-import { resolveWhy } from "../graph/resolveWhy.ts";
 import { formatAnchorTarget } from "../graph/targetResolver.ts";
 import { allTracesToRoot } from "../graph/trace.ts";
 import type { Anchor, Assessment, GraphNode, NodeId, YdkProject } from "../graph/types.ts";
@@ -29,17 +28,6 @@ export type ProjectViewNode = GraphNode & {
   trace: string[];
   traces: string[][];
   assessment?: ProjectViewAssessment;
-};
-
-export type WhyView = {
-  query: string;
-  anchor: {
-    display: string;
-    kind: string;
-    reason: string;
-    node: NodeId;
-  };
-  trace: NodeId[];
 };
 
 export type ProjectView = {
@@ -129,28 +117,6 @@ export function createProjectView(project: YdkProject): ProjectView {
       anchoredNodeCount: coverage.anchoredNodeCount,
     },
     coverage,
-  };
-}
-
-/**
- * Answers an arbitrary repo path the way `ydk why` does, so the browser and the
- * terminal resolve a query through the same anchor and the same trace.
- */
-export function createWhyView(project: YdkProject, query: string): WhyView | null {
-  const result = resolveWhy(project, query);
-  if (!result) {
-    return null;
-  }
-
-  return {
-    query,
-    anchor: {
-      display: result.displayTarget,
-      kind: result.anchor.target.kind,
-      reason: result.anchor.reason,
-      node: result.anchor.node,
-    },
-    trace: result.trace.map((step) => step.node.id),
   };
 }
 

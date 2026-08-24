@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadProject } from "../graph/loadProject.ts";
 import { validateProject } from "../graph/validateProject.ts";
-import { createProjectView, createWhyView } from "./projectView.ts";
+import { createProjectView } from "./projectView.ts";
 
 export type ServeOptions = {
   host?: string;
@@ -76,24 +76,6 @@ export function createProjectServer(options: ServeOptions = {}): Server {
           project: createProjectView(project),
           validation: validateProject(project),
         });
-        return;
-      }
-
-      if (url.pathname === "/api/why") {
-        const query = url.searchParams.get("path")?.trim() ?? "";
-        if (!query) {
-          sendJson(response, { error: "Ask why about a repo-relative path: /api/why?path=<path>" }, 400);
-          return;
-        }
-
-        const project = await loadProject(root);
-        const why = createWhyView(project, query);
-        if (!why) {
-          sendJson(response, { query, error: `No explanation found for ${query}` }, 404);
-          return;
-        }
-
-        sendJson(response, why);
         return;
       }
 

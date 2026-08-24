@@ -2,6 +2,7 @@ import {
   computed,
   createApp,
   inject,
+  nextTick,
   onMounted,
   onUnmounted,
   provide,
@@ -20,9 +21,10 @@ const COLUMN_LABELS = {
 const ANCHORABLE_TYPES = new Set(["capability", "feature"]);
 /** Anchor group key for url anchors; real directory keys are "." or end in "/". */
 const SURFACE_GROUP = "product-surfaces";
-const VIEWS = ["map", "explorer", "coverage"];
-const DEFAULT_VIEW = "explorer";
-const DEFAULT_TREE_DEPTH = 2;
+const VIEWS = ["map", "coverage"];
+const DEFAULT_VIEW = "map";
+/** The Explorer page moved to the CLI (`ydk why`); its links still point somewhere. */
+const LEGACY_VIEW = "explorer";
 const MAX_SCORE = 4;
 /** Below this a node's anchored artifacts do not yet fulfill what it claims. */
 const SCORE_WARNING_LEVEL = 3;
@@ -30,8 +32,6 @@ const SCORE_WARNING_LEVEL = 3;
 const SCORE_DANGER_LEVEL = 1;
 /** Below this many anchors a flat list reads better than directory groups. */
 const ANCHOR_GROUP_THRESHOLD = 5;
-/** Keeps a keystroke from becoming a request until typing settles. */
-const WHY_DEBOUNCE_MS = 250;
 
 const NODE_SIZES = {
   mission: { width: 270, height: 100 },
@@ -84,12 +84,6 @@ function scoreTone(score) {
 function anchorCountLabel(count) {
   if (count === 0) return "no anchors";
   return count + (count === 1 ? " anchor" : " anchors");
-}
-
-/** A query worth asking the resolver about: one token that reads like a path. */
-function looksLikePath(query) {
-  if (query.length < 3 || /\s/u.test(query)) return false;
-  return query.includes("/") || /\.[A-Za-z0-9]+$/u.test(query);
 }
 
 /** Same directory grouping the CLI prints for `ydk coverage --unanchored-files`. */
@@ -161,21 +155,7 @@ function collectDescendants(id, children, seen = new Set()) {
   return out;
 }
 
-function collectAncestors(id, parents, seen = new Set()) {
-  const out = new Set();
-  if (seen.has(id)) return out;
-  seen.add(id);
-  for (const parentId of parents.get(id) ?? []) {
-    out.add(parentId);
-    for (const deep of collectAncestors(parentId, parents, seen)) {
-      out.add(deep);
-    }
-  }
-  seen.delete(id);
-  return out;
-}
-
-/** Per-node rollups used by the outline badges and the map subtitles. */
+/** Per-node rollups behind the map subtitles and chip counts. */
 function buildSubtreeStats(nodes, edges) {
   const byId = indexNodes(nodes);
   const children = childrenByParent(nodes, edges);
@@ -203,51 +183,6 @@ function buildSubtreeStats(nodes, edges) {
   return stats;
 }
 
-/** Roots are nodes nothing points at, missions first. */
-function outlineRoots(nodes, edges) {
-  const byId = indexNodes(nodes);
-  const hasParent = new Set();
-  for (const edge of edges) {
-    if (byId.has(edge.from) && byId.has(edge.to)) hasParent.add(edge.from);
-  }
-  const roots = nodes.filter((node) => !hasParent.has(node.id));
-  if (roots.length) return roots.slice().sort(compareNodes);
-  const missions = nodes.filter((node) => node.type === "mission");
-  return (missions.length ? missions : nodes.slice(0, 1)).slice().sort(compareNodes);
-}
-
-/**
- * Collapsible outline rooted at the mission. Nodes with several parents appear
- * under each of them, so entries carry a path-derived key alongside the node id.
- */
-function buildOutline(nodes, edges, isVisible = () => true) {
-  const children = childrenByParent(nodes, edges);
-  const byId = indexNodes(nodes);
-
-  function build(id, depth, key, ancestors) {
-    if (ancestors.has(id) || !byId.has(id)) return null;
-    const nextAncestors = new Set(ancestors);
-    nextAncestors.add(id);
-
-    const entries = [];
-    for (const childId of children.get(id) ?? []) {
-      const entry = build(childId, depth + 1, key + "/" + childId, nextAncestors);
-      if (entry) entries.push(entry);
-    }
-
-    const visible = isVisible(id);
-    if (!visible && entries.length === 0) return null;
-    return { key, id, depth, children: entries };
-  }
-
-  const out = [];
-  for (const root of outlineRoots(nodes, edges)) {
-    const entry = build(root.id, 0, root.id, new Set());
-    if (entry) out.push(entry);
-  }
-  return out;
-}
-
 function anchorDirectory(display) {
   const withoutFragment = String(display ?? "").split("#")[0];
   const index = withoutFragment.lastIndexOf("/");
@@ -258,8 +193,9 @@ function groupAnchorsByDirectory(anchors) {
   const groups = new Map();
   for (const anchor of anchors ?? []) {
     const directory = anchor.kind === "url" ? SURFACE_GROUP : anchorDirectory(anchor.display);
-    const group = groups.get(directory) ?? { directory, anchors: [] };
+    const group = groups.get(directory) ?? { directory, anchors: [], staleCount: 0 };
     group.anchors.push(anchor);
+    if (anchor.stale) group.staleCount += 1;
     groups.set(directory, group);
   }
   return [...groups.values()].sort((left, right) => {
@@ -392,7 +328,9 @@ function layoutGraph(nodes, edges) {
 function parseHash(raw, hasNode) {
   const cleaned = String(raw ?? "").replace(/^#\/?/u, "");
   const [viewPart, idPart] = cleaned.split("/");
-  const view = VIEWS.includes(viewPart) ? viewPart : DEFAULT_VIEW;
+  // An old #/explorer link asked to read one node; the map panel now answers that.
+  const requested = viewPart === LEGACY_VIEW ? "map" : viewPart;
+  const view = VIEWS.includes(requested) ? requested : DEFAULT_VIEW;
   const id = idPart ? decodeURIComponent(idPart) : null;
   return { view, id: id && (!hasNode || hasNode(id)) ? id : null };
 }
@@ -414,68 +352,39 @@ const Chevron = {
   `,
 };
 
-const OutlineNode = {
-  name: "OutlineNode",
-  props: { entry: { type: Object, required: true } },
-  setup(props) {
-    const tree = inject("outlineContext");
-    const row = ref(null);
-
-    function reveal() {
-      if (tree.selectedId.value === props.entry.id && row.value) {
-        row.value.scrollIntoView({ block: "nearest" });
-      }
-    }
-
-    onMounted(reveal);
-    watch(() => tree.selectedId.value, reveal, { flush: "post" });
-
-    return { row, tree };
-  },
-  template: `
-    <div class="tree-branch">
-      <div ref="row" class="tree-row" :class="{ selected: entry.id === tree.selectedId.value }">
-        <button
-          v-if="entry.children.length"
-          class="tree-toggle"
-          type="button"
-          :aria-expanded="tree.isExpanded(entry) ? 'true' : 'false'"
-          :aria-label="(tree.isExpanded(entry) ? 'Collapse ' : 'Expand ') + entry.id"
-          @click="tree.toggle(entry)"
-        >
-          <chevron :open="tree.isExpanded(entry)" />
-        </button>
-        <span v-else class="tree-toggle tree-dot" aria-hidden="true"><i></i></span>
-        <button class="tree-label" type="button" @click="tree.select(entry.id)">
-          <span class="tree-id">{{ entry.id }}</span>
-          <span class="tree-title">{{ tree.nodeFor(entry.id).title }}</span>
-          <span v-if="tree.badgeFor(entry).warn" class="badge warn">no anchors</span>
-          <span v-else class="badge">{{ tree.badgeFor(entry).text }}</span>
-        </button>
-      </div>
-      <div v-if="entry.children.length && tree.isExpanded(entry)" class="tree-children">
-        <outline-node v-for="child in entry.children" :key="child.key" :entry="child" />
-      </div>
-    </div>
-  `,
-};
-
+/**
+ * One anchored artifact as two lines: what it is, then why it is claimed. The
+ * reason is clipped to a single line so a long list of anchors stays scannable;
+ * the full text stays reachable through the title.
+ */
 const AnchorCard = {
   name: "AnchorCard",
   props: {
     anchor: { type: Object, required: true },
     staleReason: { type: String, default: "" },
   },
+  computed: {
+    meta() {
+      const parts = [];
+      if (this.anchor.matchCount !== undefined) parts.push("matches " + this.anchor.matchCount + " files");
+      if (this.anchor.stale) parts.push("stale");
+      return parts.join(" · ");
+    },
+  },
   template: `
-    <article class="artifact">
-      <div>
+    <article class="anchor-row">
+      <div class="anchor-line">
         <span class="kind">{{ anchor.kind }}</span>
-        <strong v-if="anchor.kind === 'url'"><a :href="anchor.display">{{ anchor.display }}</a></strong>
-        <strong v-else>{{ anchor.display }}</strong>
-        <span v-if="anchor.matchCount !== undefined" class="meta">matches {{ anchor.matchCount }} files</span>
+        <a v-if="anchor.kind === 'url'" class="anchor-path" :href="anchor.display">{{ anchor.display }}</a>
+        <span v-else class="anchor-path" :title="anchor.display">{{ anchor.display }}</span>
+        <span
+          v-if="meta"
+          class="anchor-meta"
+          :class="{ stale: anchor.stale }"
+          :title="anchor.stale ? staleReason : ''"
+        >{{ meta }}</span>
       </div>
-      <p>{{ anchor.reason }}</p>
-      <p v-if="anchor.stale" class="stale-note">Stale &mdash; {{ staleReason }}</p>
+      <p class="anchor-reason" :title="anchor.reason">{{ anchor.reason }}</p>
     </article>
   `,
 };
@@ -651,11 +560,8 @@ const MapView = {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         emit("select", id);
-        return;
       }
-      if (event.key === "Escape") {
-        emit("clear");
-      }
+      // Escape is handled for the whole page, so it closes the panel from inside it too.
     }
 
     function edgeClass(edge) {
@@ -728,7 +634,7 @@ const MapView = {
 
       <p class="map-hint">
         <kbd>&#8592;</kbd><kbd>&#8593;</kbd><kbd>&#8594;</kbd><kbd>&#8595;</kbd> move between nodes
-        &middot; <kbd>Enter</kbd> open the node &middot; <kbd>Esc</kbd> clear focus
+        &middot; <kbd>Enter</kbd> open the detail panel &middot; <kbd>Esc</kbd> close it
       </p>
 
       <div
@@ -816,19 +722,12 @@ const App = {
     const selectedId = ref(null);
     const explicitSelection = ref(false);
 
-    const search = ref("");
-    const unanchoredOnly = ref(false);
-    const kindFilter = ref("any");
-    const expandedOverrides = ref({});
-    const allCollapsed = ref(false);
-    const showAllPaths = ref(false);
-    const showIndex = ref(false);
     const openAnchorGroups = ref({});
     const openDirectories = ref({});
+    const openAssessed = ref({});
 
     const nodes = computed(() => project.value?.nodes ?? []);
     const edges = computed(() => project.value?.edges ?? []);
-    const anchors = computed(() => project.value?.anchors ?? []);
     const stats = computed(
       () =>
         project.value?.stats ?? {
@@ -855,7 +754,6 @@ const App = {
     );
 
     const nodeById = computed(() => indexNodes(nodes.value));
-    const parents = computed(() => parentsByChild(nodes.value, edges.value));
     const children = computed(() => childrenByParent(nodes.value, edges.value));
     const subtreeStats = computed(() => buildSubtreeStats(nodes.value, edges.value));
 
@@ -891,8 +789,9 @@ const App = {
       explicitSelection.value = true;
     }
 
-    function openInExplorer(id) {
-      view.value = "explorer";
+    /** Coverage names a node; the map is where that node can be seen in context. */
+    function showOnMap(id) {
+      view.value = "map";
       selectNode(id);
     }
 
@@ -902,147 +801,29 @@ const App = {
 
     watch([view, selectedId, explicitSelection], syncHash);
 
-    /* ----------------------------------------------------------- outline */
-
-    const anchorKinds = computed(() => {
-      const kinds = new Set();
-      for (const anchor of anchors.value) kinds.add(anchor.kind);
-      return [...kinds].sort();
-    });
-
-    const matchedIds = computed(() => {
-      const query = search.value.trim().toLowerCase();
-      const kind = kindFilter.value;
-      const unanchored = unanchoredOnly.value;
-      if (!query && kind === "any" && !unanchored) return null;
-
-      const matches = new Set();
-      for (const node of nodes.value) {
-        if (query) {
-          const anchorText = node.anchors.map((anchor) => anchor.display + " " + anchor.reason).join(" ");
-          const haystack = [node.id, node.type, node.title, node.statement ?? "", anchorText].join(" ").toLowerCase();
-          if (!haystack.includes(query)) continue;
-        }
-        if (kind !== "any" && !node.anchors.some((anchor) => anchor.kind === kind)) continue;
-        if (unanchored && !(ANCHORABLE_TYPES.has(node.type) && node.anchors.length === 0)) continue;
-        matches.add(node.id);
-      }
-      return matches;
-    });
-
-    const visibleIds = computed(() => {
-      const matches = matchedIds.value;
-      if (!matches) return null;
-      const out = new Set(matches);
-      for (const id of matches) {
-        for (const ancestor of collectAncestors(id, parents.value)) out.add(ancestor);
-      }
-      return out;
-    });
-
-    const filtersActive = computed(() => visibleIds.value !== null);
-
-    watch(filtersActive, () => {
-      expandedOverrides.value = {};
-      allCollapsed.value = false;
-    });
-
-    const outline = computed(() =>
-      buildOutline(nodes.value, edges.value, (id) => visibleIds.value === null || visibleIds.value.has(id)),
-    );
-
-    const outlineEmpty = computed(() => outline.value.length === 0);
-
-    function isExpanded(entry) {
-      const override = expandedOverrides.value[entry.id];
-      if (override !== undefined) return override;
-      if (filtersActive.value) return true;
-      return entry.depth < DEFAULT_TREE_DEPTH + 1;
-    }
-
-    function toggleExpanded(entry) {
-      expandedOverrides.value = { ...expandedOverrides.value, [entry.id]: !isExpanded(entry) };
-    }
-
-    function toggleAll() {
-      const nextValue = allCollapsed.value;
-      const next = {};
-      for (const node of nodes.value) next[node.id] = nextValue;
-      expandedOverrides.value = next;
-      allCollapsed.value = !nextValue;
-    }
-
-    // A deep link can land on a node whose branch is closed; open the way to it.
-    watch(selectedId, (id) => {
-      if (!id) return;
-      const ancestors = collectAncestors(id, parents.value);
-      let changed = false;
-      const next = { ...expandedOverrides.value };
-      for (const ancestor of ancestors) {
-        if (next[ancestor] !== true) {
-          next[ancestor] = true;
-          changed = true;
-        }
-      }
-      if (changed) expandedOverrides.value = next;
-    });
-
-    function badgeFor(entry) {
-      const stat = subtreeStats.value.get(entry.id) ?? { anchorCount: 0, featureCount: 0, anchorTotal: 0 };
-      const node = nodeById.value.get(entry.id);
-      if (node && ANCHORABLE_TYPES.has(node.type) && stat.anchorCount === 0) {
-        return { warn: true, text: "no anchors" };
-      }
-      if (entry.children.length) {
-        return { warn: false, text: stat.featureCount + "f · " + stat.anchorTotal };
-      }
-      return { warn: false, text: String(stat.anchorCount) };
-    }
-
-    provide("outlineContext", {
-      badgeFor,
-      isExpanded,
-      nodeFor: (id) => nodeById.value.get(id) ?? { id, title: id },
-      select: selectNode,
-      selectedId,
-      toggle: toggleExpanded,
-    });
-
-    /* ------------------------------------------------------------ detail */
-
-    function traceNodes(trace) {
-      return (trace ?? []).map((id) => nodeById.value.get(id)).filter(Boolean);
-    }
+    /* -------------------------------------------------------- node panel */
 
     const selectedTraces = computed(() => {
       const node = selectedNode.value;
       if (!node) return [];
       const traces = node.traces?.length ? node.traces : node.trace?.length ? [node.trace] : [];
-      return traces.map((trace) => traceNodes(trace));
+      return traces.map((trace) => trace.map((id) => nodeById.value.get(id)).filter(Boolean));
     });
 
-    const primaryTrace = computed(() => selectedTraces.value[0] ?? []);
+    /** The panel is the selection made explicit, so closing it clears the focus. */
+    const panelNode = computed(() => (explicitSelection.value ? selectedNode.value : null));
 
-    const alternateSummary = computed(() => {
-      const traces = selectedTraces.value;
-      if (traces.length < 2) return null;
-      const primaryIds = new Set((traces[0] ?? []).map((node) => node.id));
-      for (const trace of traces.slice(1)) {
-        const branch = trace.find((node) => !primaryIds.has(node.id));
-        if (branch) return { count: traces.length, node: branch };
-      }
-      return { count: traces.length, node: null };
+    const selectedAssessment = computed(() => panelNode.value?.assessment ?? null);
+
+    /** What the panel says about drift, in the words the Coverage page uses. */
+    const selectedDrift = computed(() => {
+      const assessment = selectedAssessment.value;
+      if (!assessment) return null;
+      const parts = [];
+      if (assessment.unfulfilled.length) parts.push(assessment.unfulfilled.length + " unfulfilled");
+      if (assessment.undeclared.length) parts.push(assessment.undeclared.length + " undeclared");
+      return parts.length ? parts.join(" · ") : null;
     });
-
-    const selectedChildren = computed(() =>
-      (children.value.get(selectedId.value) ?? []).map((id) => nodeById.value.get(id)).filter(Boolean),
-    );
-
-    const selectedParents = computed(() =>
-      (parents.value.get(selectedId.value) ?? []).map((id) => nodeById.value.get(id)).filter(Boolean),
-    );
-
-    const selectedAssessment = computed(() => selectedNode.value?.assessment ?? null);
 
     const staleReasons = computed(() => {
       const map = new Map();
@@ -1079,80 +860,6 @@ const App = {
       if (directory === SURFACE_GROUP) return "Product surfaces";
       return directory === "." ? "(repository root)" : directory;
     }
-
-    /* ------------------------------------------------------ why resolution */
-
-    const whyQuery = ref("");
-    const whyView = ref(null);
-    const whyMissing = ref(false);
-    let whyTimer = null;
-    let whyRequest = 0;
-
-    function forgetWhy() {
-      whyQuery.value = "";
-      whyView.value = null;
-      whyMissing.value = false;
-    }
-
-    /**
-     * A path the literal filter cannot place still has an explanation: pattern
-     * and directory anchors cover files nothing names. Asking `/api/why` runs
-     * the same resolver as the CLI, so the browser answers what the terminal would.
-     */
-    async function resolveWhy(query) {
-      const request = ++whyRequest;
-      try {
-        const response = await fetch("/api/why?path=" + encodeURIComponent(query));
-        if (request !== whyRequest) return;
-        if (response.ok) {
-          whyQuery.value = query;
-          whyView.value = await response.json();
-          whyMissing.value = false;
-          return;
-        }
-        // A miss is the normal answer for a path nothing anchors, not a failure.
-        whyQuery.value = query;
-        whyView.value = null;
-        whyMissing.value = response.status === 404;
-      } catch {
-        if (request === whyRequest) forgetWhy();
-      }
-    }
-
-    watch([search, matchedIds], () => {
-      const query = search.value.trim();
-      const matches = matchedIds.value;
-      if (whyTimer) clearTimeout(whyTimer);
-
-      if (!looksLikePath(query) || !matches || matches.size > 0) {
-        whyRequest += 1;
-        forgetWhy();
-        return;
-      }
-      if (whyQuery.value === query) return;
-
-      whyTimer = setTimeout(() => resolveWhy(query), WHY_DEBOUNCE_MS);
-    });
-
-    const whyResolution = computed(() => {
-      const view = whyView.value;
-      if (!view) return null;
-      return {
-        anchor: view.anchor,
-        node: nodeById.value.get(view.anchor.node) ?? null,
-        query: view.query,
-        // Only worth naming when the anchor is not the query typed verbatim.
-        via: view.anchor.display === view.query ? null : view.anchor.display,
-      };
-    });
-
-    const visibleAnchors = computed(() => {
-      const query = search.value.trim().toLowerCase();
-      if (!query) return anchors.value;
-      return anchors.value.filter((anchor) =>
-        [anchor.display, anchor.kind, anchor.reason, anchor.nodeTitle].join(" ").toLowerCase().includes(query),
-      );
-    });
 
     /* --------------------------------------------------------------- map */
 
@@ -1219,8 +926,17 @@ const App = {
       return { active: true, altEdges, pathNodes, primaryEdges, subtree };
     });
 
+    /** Closing the panel and dropping the map highlight are one act. */
     function clearFocus() {
       explicitSelection.value = false;
+    }
+
+    // Escape closes the panel from anywhere on the page, except while typing,
+    // where the field it belongs to has first claim on the key.
+    function onEscape(event) {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+      clearFocus();
     }
 
     /* ---------------------------------------------------------- coverage */
@@ -1269,13 +985,34 @@ const App = {
       (coverage.value.assessedNodes ?? [])
         .map((node) => {
           const assessment = nodeById.value.get(node.id)?.assessment;
+          const unfulfilled = assessment?.unfulfilled ?? [];
+          const undeclared = assessment?.undeclared ?? [];
           const findings = [];
-          if (assessment?.unfulfilled.length) findings.push(assessment.unfulfilled.length + " unfulfilled");
-          if (assessment?.undeclared.length) findings.push(assessment.undeclared.length + " undeclared");
-          return { ...node, findings: findings.join(" · ") };
+          if (unfulfilled.length) findings.push(unfulfilled.length + " unfulfilled");
+          if (undeclared.length) findings.push(undeclared.length + " undeclared");
+          return { ...node, undeclared, unfulfilled, findings: findings.join(" · ") };
         })
         .sort((left, right) => left.score - right.score),
     );
+
+    function isAssessedOpen(id) {
+      return openAssessed.value[id] === true;
+    }
+
+    function toggleAssessed(id) {
+      openAssessed.value = { ...openAssessed.value, [id]: !isAssessedOpen(id) };
+    }
+
+    /**
+     * The panel names how much a node has drifted; Coverage holds the findings
+     * themselves. Following the line opens the row that spells them out.
+     */
+    async function showDriftInCoverage(id) {
+      view.value = "coverage";
+      openAssessed.value = { ...openAssessed.value, [id]: true };
+      await nextTick();
+      document.getElementById("assessed-" + id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
 
     const assessmentSummary = computed(() => {
       if (!assessedNodes.value.length) return null;
@@ -1303,15 +1040,16 @@ const App = {
         loading.value = false;
       }
       window.addEventListener("hashchange", applyHash);
+      window.addEventListener("keydown", onEscape);
     });
 
-    onUnmounted(() => window.removeEventListener("hashchange", applyHash));
+    onUnmounted(() => {
+      window.removeEventListener("hashchange", applyHash);
+      window.removeEventListener("keydown", onEscape);
+    });
 
     return {
-      allCollapsed,
-      alternateSummary,
       anchorGroups,
-      anchorKinds,
       anchoredPercent,
       anchorsGrouped,
       assessedNodes,
@@ -1321,8 +1059,8 @@ const App = {
       error,
       fileCoverage,
       groupLabel,
+      isAssessedOpen,
       isGroupOpen,
-      kindFilter,
       loading,
       mapHighlight,
       mapLayout,
@@ -1330,38 +1068,25 @@ const App = {
       meterTone,
       nodeCoverage,
       nodes,
-      openInExplorer,
-      outline,
-      outlineEmpty,
-      primaryTrace,
+      panelNode,
       project,
-      scoreBadge,
       scoreLabel,
       scoreTone,
-      search,
       selectNode,
       selectedAssessment,
-      selectedChildren,
+      selectedDrift,
       selectedId,
-      selectedNode,
-      selectedParents,
-      selectedTraces,
       setView,
-      showAllPaths,
-      showIndex,
+      showDriftInCoverage,
+      showOnMap,
       showUnanchoredFiles,
       staleReason,
       stats,
-      toggleAll,
+      toggleAssessed,
       toggleGroup,
       unanchoredFileGroups,
-      unanchoredOnly,
       validation,
       view,
-      visibleAnchors,
-      whyMissing,
-      whyQuery,
-      whyResolution,
     };
   },
   template: `
@@ -1380,7 +1105,6 @@ const App = {
           </div>
           <nav class="tabs" aria-label="views">
             <button type="button" :class="{ active: view === 'map' }" @click="setView('map')">Map</button>
-            <button type="button" :class="{ active: view === 'explorer' }" @click="setView('explorer')">Explorer</button>
             <button type="button" :class="{ active: view === 'coverage' }" @click="setView('coverage')">Coverage</button>
           </nav>
         </div>
@@ -1412,254 +1136,86 @@ const App = {
               @select="selectNode"
               @clear="clearFocus"
             />
-          </div>
 
-          <!-- Explorer -------------------------------------------------- -->
-          <div v-show="view === 'explorer'" class="view">
-            <section class="workspace">
-              <aside class="navigator card" aria-label="purpose graph">
-                <div class="search">
-                  <input v-model="search" type="search" placeholder="Search nodes and artifacts" aria-label="Search nodes and artifacts">
+            <!-- Node detail: the selection, read at length beside the map. -->
+            <aside v-if="panelNode" class="node-panel card" aria-label="selected node">
+              <div class="panel-header">
+                <div class="panel-heading">
+                  <p class="eyebrow">{{ panelNode.type }}</p>
+                  <h2>{{ panelNode.title }}</h2>
                 </div>
-
-                <div v-if="whyResolution" class="resolution">
-                  <div class="resolution-head">
-                    <span class="resolution-label">Resolved artifact</span>
-                    <span class="resolution-query">{{ whyResolution.query }}</span>
-                  </div>
-                  <p v-if="whyResolution.via" class="resolution-via">
-                    matched via <span class="kind">{{ whyResolution.anchor.kind }}</span>
-                    <strong>{{ whyResolution.via }}</strong>
-                  </p>
-                  <button
-                    v-if="whyResolution.node"
-                    type="button"
-                    class="resolution-node"
-                    @click="selectNode(whyResolution.node.id)"
-                  >
-                    <span class="node-id">{{ whyResolution.node.id }}</span>
-                    <span class="list-title">{{ whyResolution.node.title }}</span>
-                    <span
-                      v-if="whyResolution.node.assessment"
-                      class="badge"
-                      :class="scoreTone(whyResolution.node.assessment.score)"
-                    >{{ scoreBadge(whyResolution.node.assessment.score) }}</span>
-                  </button>
-                  <p class="muted resolution-reason">{{ whyResolution.anchor.reason }}</p>
-                </div>
-
-                <p v-else-if="whyMissing" class="muted resolution-miss">
-                  No explanation found for <strong>{{ whyQuery }}</strong> &mdash; no anchor reaches it.
-                </p>
-
-                <div class="filters">
-                  <button
-                    type="button"
-                    class="chip"
-                    :class="{ active: unanchoredOnly }"
-                    :aria-pressed="unanchoredOnly ? 'true' : 'false'"
-                    @click="unanchoredOnly = !unanchoredOnly"
-                  >
-                    Unanchored only
-                  </button>
-                  <label class="chip chip-select">
-                    Kind:
-                    <select v-model="kindFilter" aria-label="Filter by anchor kind">
-                      <option value="any">any</option>
-                      <option v-for="kind in anchorKinds" :key="kind" :value="kind">{{ kind }}</option>
-                    </select>
-                  </label>
-                  <button type="button" class="chip chip-quiet" @click="toggleAll()">
-                    {{ allCollapsed ? 'Expand all' : 'Collapse all' }}
-                  </button>
-                </div>
-
-                <div class="tree">
-                  <p v-if="outlineEmpty" class="muted empty">Nothing matches these filters.</p>
-                  <outline-node v-for="entry in outline" :key="entry.key" :entry="entry" />
-                </div>
-              </aside>
-
-              <section v-if="selectedNode" class="detail card">
-                <div class="detail-header">
-                  <div>
-                    <p class="eyebrow">{{ selectedNode.type }}</p>
-                    <h2>{{ selectedNode.title }}</h2>
-                  </div>
-                  <div class="detail-badges">
-                    <span
-                      v-if="selectedAssessment"
-                      class="badge"
-                      :class="scoreTone(selectedAssessment.score)"
-                      :title="'Assessed ' + selectedAssessment.assessed"
-                    >
-                      {{ scoreLabel(selectedAssessment.score) }}
-                    </span>
-                    <span class="node-pill">{{ selectedNode.id }}</span>
-                  </div>
-                </div>
-
-                <p v-if="selectedNode.statement" class="statement">{{ selectedNode.statement }}</p>
-
-                <!-- Anchors lead: everything below explains the artifacts named here. -->
-                <section class="artifacts">
-                  <div class="section-head">
-                    <h3>Anchored Artifacts</h3>
-                    <span v-if="selectedNode.anchors.length" class="muted">
-                      <template v-if="anchorsGrouped">
-                        {{ selectedNode.anchors.length }} across {{ anchorGroups.length }} {{ anchorGroups.length === 1 ? 'directory' : 'directories' }}
-                      </template><template v-else>
-                        {{ selectedNode.anchors.length === 1 ? '1 anchor' : selectedNode.anchors.length + ' anchors' }}
-                      </template>
-                    </span>
-                    <span class="muted section-note">The artifacts this node claims.</span>
-                  </div>
-
-                  <template v-if="anchorsGrouped">
-                    <div v-for="group in anchorGroups" :key="group.directory" class="artifact-group">
-                      <button type="button" class="group-header" @click="toggleGroup(group.directory)">
-                        <chevron :open="isGroupOpen(group.directory)" />
-                        <span>{{ groupLabel(group.directory) }}</span>
-                        <span class="badge">{{ group.anchors.length }}</span>
-                      </button>
-                      <div v-if="isGroupOpen(group.directory)" class="group-body">
-                        <anchor-card
-                          v-for="anchor in group.anchors"
-                          :key="anchor.display"
-                          :anchor="anchor"
-                          :stale-reason="anchor.stale ? staleReason(anchor) : ''"
-                        />
-                      </div>
-                    </div>
-                  </template>
-
-                  <div v-else-if="selectedNode.anchors.length" class="group-body flat">
-                    <anchor-card
-                      v-for="anchor in selectedNode.anchors"
-                      :key="anchor.display"
-                      :anchor="anchor"
-                      :stale-reason="anchor.stale ? staleReason(anchor) : ''"
-                    />
-                  </div>
-
-                  <p v-else class="muted">No artifacts anchor directly to this node.</p>
-                </section>
-
-                <section class="trace">
-                  <h3>Why Path</h3>
-                  <div class="why-path">
-                    <template v-for="(step, index) in primaryTrace" :key="step.id">
-                      <svg v-if="index" class="why-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"
-                        stroke="#8fb39b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M3 7h8M8 3.5 11.5 7 8 10.5"></path>
-                      </svg>
-                      <button
-                        type="button"
-                        class="why-chip"
-                        :class="{ active: step.id === selectedNode.id }"
-                        @click="selectNode(step.id)"
-                      >
-                        <strong>{{ step.id }}</strong> {{ step.title }}
-                      </button>
-                    </template>
-                    <p v-if="!primaryTrace.length" class="muted">No path to the mission from this node.</p>
-                  </div>
-
-                  <p v-if="alternateSummary" class="path-note">
-                    {{ alternateSummary.count }} paths reach the mission<template v-if="alternateSummary.node">
-                      &mdash; also via <strong class="node-id">{{ alternateSummary.node.id }}</strong>
-                      {{ alternateSummary.node.title }}</template>
-                    &middot;
-                    <button type="button" class="link-button" @click="showAllPaths = !showAllPaths">
-                      {{ showAllPaths ? 'Hide all paths' : 'Show all paths' }}
-                    </button>
-                  </p>
-
-                  <div v-if="alternateSummary && showAllPaths" class="alt-paths">
-                    <div v-for="(trace, traceIndex) in selectedTraces" :key="'path-' + traceIndex" class="alt-path">
-                      <span class="alt-path-label">{{ traceIndex === 0 ? 'primary' : 'alt ' + traceIndex }}</span>
-                      <template v-for="(step, index) in trace" :key="step.id + '-' + index">
-                        <span v-if="index" class="alt-path-sep">&rsaquo;</span>
-                        <button
-                          type="button"
-                          class="why-chip small"
-                          :class="{ active: step.id === selectedNode.id }"
-                          @click="selectNode(step.id)"
-                        >
-                          <strong>{{ step.id }}</strong> {{ step.title }}
-                        </button>
-                      </template>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="relationships">
-                  <div>
-                    <h3>Supported By</h3>
-                    <button v-for="node in selectedChildren" :key="node.id" type="button" @click="selectNode(node.id)">
-                      <strong class="node-id">{{ node.id }}</strong> {{ node.title }}
-                    </button>
-                    <p v-if="!selectedChildren.length" class="muted">No child nodes.</p>
-                  </div>
-                  <div>
-                    <h3>Supports</h3>
-                    <button v-for="node in selectedParents" :key="node.id" type="button" @click="selectNode(node.id)">
-                      <strong class="node-id">{{ node.id }}</strong> {{ node.title }}
-                    </button>
-                    <p v-if="!selectedParents.length" class="muted">This is the top-level mission.</p>
-                  </div>
-                </section>
-
-                <section v-if="selectedAssessment" class="assessment">
-                  <div class="section-head">
-                    <h3>Assessment</h3>
-                    <span class="badge" :class="scoreTone(selectedAssessment.score)">
-                      {{ scoreLabel(selectedAssessment.score) }}
-                    </span>
-                    <span class="muted">assessed {{ selectedAssessment.assessed }}</span>
-                  </div>
-                  <p class="muted">
-                    How well the artifacts above fulfill what this node claims. Judged on direct anchors only.
-                  </p>
-
-                  <div v-if="selectedAssessment.unfulfilled.length">
-                    <h4>Claimed but not delivered</h4>
-                    <ul class="finding-list">
-                      <li v-for="finding in selectedAssessment.unfulfilled" :key="finding">{{ finding }}</li>
-                    </ul>
-                  </div>
-
-                  <div v-if="selectedAssessment.undeclared.length">
-                    <h4>Delivered but not claimed</h4>
-                    <ul class="finding-list">
-                      <li v-for="finding in selectedAssessment.undeclared" :key="finding">{{ finding }}</li>
-                    </ul>
-                  </div>
-                </section>
-              </section>
-            </section>
-
-            <section class="artifact-index card">
-              <button type="button" class="index-toggle" @click="showIndex = !showIndex">
-                <chevron :open="showIndex" />
-                <h2>Artifact Index</h2>
-                <span class="badge">{{ visibleAnchors.length }}</span>
-              </button>
-              <div v-if="showIndex" class="artifact-grid">
-                <button
-                  v-for="anchor in visibleAnchors"
-                  :key="anchor.display + anchor.node"
-                  type="button"
-                  class="artifact compact"
-                  @click="selectNode(anchor.node)"
-                >
-                  <span class="kind">{{ anchor.kind }}</span>
-                  <strong>{{ anchor.display }}</strong>
-                  <small>{{ anchor.node }} {{ anchor.nodeTitle }}</small>
+                <button type="button" class="panel-close" aria-label="Close node detail" @click="clearFocus()">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" aria-hidden="true"><path d="M2 2 8 8 M8 2 2 8"></path></svg>
                 </button>
-                <p v-if="!visibleAnchors.length" class="muted">No artifacts match this search.</p>
               </div>
-            </section>
+
+              <div class="panel-badges">
+                <span
+                  v-if="selectedAssessment"
+                  class="badge"
+                  :class="scoreTone(selectedAssessment.score)"
+                  :title="'Assessed ' + selectedAssessment.assessed"
+                >{{ scoreLabel(selectedAssessment.score) }}</span>
+                <span class="node-pill">{{ panelNode.id }}</span>
+              </div>
+
+              <p v-if="panelNode.statement" class="statement">{{ panelNode.statement }}</p>
+
+              <section class="artifacts">
+                <div class="section-head">
+                  <h3>Anchored artifacts</h3>
+                  <span v-if="panelNode.anchors.length" class="muted section-note">
+                    <template v-if="anchorsGrouped">
+                      {{ panelNode.anchors.length }} across {{ anchorGroups.length }} {{ anchorGroups.length === 1 ? 'directory' : 'directories' }}
+                    </template><template v-else>
+                      {{ panelNode.anchors.length === 1 ? '1 anchor' : panelNode.anchors.length + ' anchors' }}
+                    </template>
+                  </span>
+                </div>
+
+                <template v-if="anchorsGrouped">
+                  <div v-for="group in anchorGroups" :key="group.directory" class="artifact-group">
+                    <button
+                      type="button"
+                      class="group-header"
+                      :aria-expanded="isGroupOpen(group.directory) ? 'true' : 'false'"
+                      @click="toggleGroup(group.directory)"
+                    >
+                      <chevron :open="isGroupOpen(group.directory)" />
+                      <span class="group-name">{{ groupLabel(group.directory) }}</span>
+                      <span class="badge">{{ group.anchors.length }}</span>
+                      <span v-if="group.staleCount" class="badge danger">{{ group.staleCount }} stale</span>
+                    </button>
+                    <div v-if="isGroupOpen(group.directory)" class="group-body">
+                      <anchor-card
+                        v-for="anchor in group.anchors"
+                        :key="anchor.display"
+                        :anchor="anchor"
+                        :stale-reason="anchor.stale ? staleReason(anchor) : ''"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <div v-else-if="panelNode.anchors.length" class="group-body flat">
+                  <anchor-card
+                    v-for="anchor in panelNode.anchors"
+                    :key="anchor.display"
+                    :anchor="anchor"
+                    :stale-reason="anchor.stale ? staleReason(anchor) : ''"
+                  />
+                </div>
+
+                <p v-else class="muted">No artifacts anchor directly to this node.</p>
+              </section>
+
+              <p v-if="selectedDrift" class="panel-drift">
+                <button type="button" class="link-button" @click="showDriftInCoverage(panelNode.id)">
+                  {{ selectedDrift }} &mdash; details in Coverage
+                </button>
+              </p>
+            </aside>
           </div>
 
           <!-- Coverage -------------------------------------------------- -->
@@ -1756,7 +1312,8 @@ const App = {
                       :key="node.id"
                       type="button"
                       class="list-row"
-                      @click="openInExplorer(node.id)"
+                      :title="'Show ' + node.id + ' on the Map'"
+                      @click="showOnMap(node.id)"
                     >
                       <span class="node-id">{{ node.id }}</span>
                       <span class="list-title">{{ node.title }}</span>
@@ -1774,19 +1331,62 @@ const App = {
                   <p class="muted">
                     assessed {{ assessmentSummary.assessed }} / {{ assessmentSummary.total }} anchorable nodes<template
                       v-if="assessmentSummary.average"> &middot; avg score {{ assessmentSummary.average }}</template>
+                    &middot; expand a row for its findings
                   </p>
-                  <button
+                  <div
                     v-for="node in assessedNodes"
                     :key="node.id"
-                    type="button"
-                    class="list-row"
-                    @click="openInExplorer(node.id)"
+                    :id="'assessed-' + node.id"
+                    class="assessed-row"
+                    :class="{ open: isAssessedOpen(node.id) }"
                   >
-                    <span class="node-id">{{ node.id }}</span>
-                    <span class="list-title">{{ node.title }}</span>
-                    <span v-if="node.findings" class="muted list-findings">{{ node.findings }}</span>
-                    <span class="badge" :class="scoreTone(node.score)">{{ scoreLabel(node.score) }}</span>
-                  </button>
+                    <div class="assessed-head">
+                      <button
+                        type="button"
+                        class="assessed-toggle"
+                        :aria-expanded="isAssessedOpen(node.id) ? 'true' : 'false'"
+                        :aria-label="(isAssessedOpen(node.id) ? 'Hide ' : 'Show ') + node.id + ' findings'"
+                        @click="toggleAssessed(node.id)"
+                      >
+                        <chevron :open="isAssessedOpen(node.id)" />
+                      </button>
+                      <button
+                        type="button"
+                        class="assessed-id node-id"
+                        :title="'Show ' + node.id + ' on the Map'"
+                        @click="showOnMap(node.id)"
+                      >{{ node.id }}</button>
+                      <button
+                        type="button"
+                        class="assessed-body"
+                        :aria-expanded="isAssessedOpen(node.id) ? 'true' : 'false'"
+                        @click="toggleAssessed(node.id)"
+                      >
+                        <span class="list-title">{{ node.title }}</span>
+                        <span v-if="node.findings" class="muted list-findings">{{ node.findings }}</span>
+                        <span class="badge" :class="scoreTone(node.score)">{{ scoreLabel(node.score) }}</span>
+                      </button>
+                    </div>
+
+                    <div v-if="isAssessedOpen(node.id)" class="assessed-detail">
+                      <div v-if="node.unfulfilled.length">
+                        <h4>Claimed but not delivered</h4>
+                        <ul class="finding-list">
+                          <li v-for="finding in node.unfulfilled" :key="finding">{{ finding }}</li>
+                        </ul>
+                      </div>
+                      <div v-if="node.undeclared.length">
+                        <h4>Delivered but not claimed</h4>
+                        <ul class="finding-list">
+                          <li v-for="finding in node.undeclared" :key="finding">{{ finding }}</li>
+                        </ul>
+                      </div>
+                      <p v-if="!node.unfulfilled.length && !node.undeclared.length" class="muted">
+                        No findings recorded for this node.
+                      </p>
+                      <p class="muted">assessed {{ node.assessed }}</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="card">
@@ -1800,7 +1400,8 @@ const App = {
                       :key="stale.display + stale.node"
                       type="button"
                       class="list-row stacked"
-                      @click="openInExplorer(stale.node)"
+                      :title="'Show ' + stale.node + ' on the Map'"
+                      @click="showOnMap(stale.node)"
                     >
                       <span class="list-line">
                         <strong>{{ stale.display }}</strong>
@@ -1823,7 +1424,6 @@ const App = {
 const app = createApp(App);
 app.component("anchor-card", AnchorCard);
 app.component("chevron", Chevron);
-app.component("outline-node", OutlineNode);
 app.component("coverage-directory", CoverageDirectory);
 app.component("map-view", MapView);
 app.mount("#app");

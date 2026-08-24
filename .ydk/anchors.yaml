@@ -167,12 +167,6 @@ anchors:
 
   - target:
       kind: url
-      value: /#/explorer
-    node: F-001
-    reason: Explorer page where a maintainer resolves nodes and artifacts to their why.
-
-  - target:
-      kind: url
       value: /#/map
     node: F-004
     reason: Map page that shows the whole purpose graph as one navigable picture.

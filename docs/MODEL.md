@@ -356,8 +356,9 @@ moved since it was made.
 `ydk coverage` shows a score beside each assessed node and adds one summary row
 counting how many anchorable nodes have been assessed, with their average score.
 A repo with no assessments file gets the report exactly as it was before. The
-browser explorer shows the score and both finding lists on a node's detail
-panel, and lists the assessed nodes on its coverage page.
+browser explorer shows a node's score on its map detail panel, and lists the
+assessed nodes on its coverage page, where expanding a row shows both finding
+lists.
 
 ## Browser Explorer
 
@@ -372,9 +373,11 @@ project mission, the result and capability chain beneath it, and the artifacts
 anchored to each node. This makes the graph useful as a project map instead of
 only a raw node-edge diagram.
 
-It presents that graph three ways, each on its own hash route: an outline
-`#/explorer` for reading a node and its anchors, a layered `#/map` for seeing the
-shape of the graph, and `#/coverage` for the same report `ydk coverage` prints.
+It presents that graph two ways, each on its own hash route: a layered `#/map`
+for seeing the shape of the graph, with a side panel for reading the selected
+node and its anchors, and `#/coverage` for the same report `ydk coverage`
+prints. Explaining a single artifact stays in the terminal, where `ydk why`
+answers it without the browser needing a code browser of its own.
 
 ## What Was Removed
 

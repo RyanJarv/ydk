@@ -90,46 +90,29 @@ test("serves the browser runtime when inspecting an external project", async () 
   assert.match(response.body, /createApp/);
 });
 
-test("explains an artifact the way ydk why does", async () => {
+test("serves the whole project graph the browser draws", async () => {
+  const root = await createServedProject();
+
+  const response = await request(root, "/api/project");
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"] ?? "", /^application\/json/);
+  const payload = JSON.parse(response.body);
+  assert.equal(payload.validation.ok, true);
+  assert.deepEqual(
+    payload.project.nodes.map((node: { id: string }) => node.id),
+    ["M-001", "C-001"],
+  );
+});
+
+// Asking why one artifact exists is the CLI's job now; the browser has no route for it.
+test("no longer answers artifact why queries", async () => {
   const root = await createServedProject();
 
   const response = await request(root, "/api/why?path=docs/examples/direct-cli.md");
 
-  assert.equal(response.status, 200);
-  assert.match(response.headers["content-type"] ?? "", /^application\/json/);
-  assert.deepEqual(JSON.parse(response.body), {
-    query: "docs/examples/direct-cli.md",
-    anchor: {
-      display: "docs/examples",
-      kind: "directory",
-      reason: "Explores how the purpose graph could be used.",
-      node: "C-001",
-    },
-    trace: ["C-001", "M-001"],
-  });
-});
-
-test("answers a path no anchor covers with 404", async () => {
-  const root = await createServedProject();
-
-  const response = await request(root, "/api/why?path=src/cli.ts");
-
   assert.equal(response.status, 404);
-  assert.deepEqual(JSON.parse(response.body), {
-    query: "src/cli.ts",
-    error: "No explanation found for src/cli.ts",
-  });
-});
-
-test("answers a missing or empty path with 400", async () => {
-  const root = await createServedProject();
-
-  for (const url of ["/api/why", "/api/why?path=", "/api/why?path=%20"]) {
-    const response = await request(root, url);
-
-    assert.equal(response.status, 400, `expected ${url} to be rejected`);
-    assert.match(JSON.parse(response.body).error, /path/u);
-  }
+  assert.equal(response.body, "Not found");
 });
 
 test("exposes the files no anchor covers to the browser", async () => {

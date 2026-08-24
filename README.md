@@ -89,18 +89,17 @@ npm run ydk -- serve
 ```
 
 The explorer loads `.ydk/graph.yaml` and `.ydk/anchors.yaml` and splits them
-across three tabs. Each tab is a hash route, so any view is linkable:
+across two tabs. Each tab is a hash route, so any view is linkable:
 
-- **Explorer** (`#/explorer`) — a collapsible outline of the graph with search
-  and filters, plus the why path, neighbors, and anchored artifacts of the
-  selected node. `#/explorer/F-001` opens straight to a node.
 - **Map** (`#/map`) — the graph as layered columns, one per node type. Selecting
-  a node highlights its path to the mission and dims everything off it.
+  a node highlights its path to the mission, dims everything off it, and opens a
+  panel with the node's statement and anchored artifacts. `#/map/F-001` opens
+  straight to a node.
 - **Coverage** (`#/coverage`) — the same numbers `ydk coverage` prints, as stat
-  tiles, a per-directory breakdown, and lists of unanchored nodes and stale
-  anchors.
+  tiles, a per-directory breakdown, and lists of unanchored nodes, stale
+  anchors, and assessed nodes with their findings.
 
-![ydk project explorer, Explorer view](./docs/assets/ydk-serve.png)
+Asking why one artifact exists is the CLI's job: `ydk why <path>`.
 
 ![ydk project explorer, Map view](./docs/assets/ydk-serve-map.png)
 
