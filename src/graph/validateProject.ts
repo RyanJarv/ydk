@@ -1,7 +1,7 @@
 import { ANCHORABLE_NODE_TYPES } from "./coverage.ts";
 import { createTargetResolver, formatAnchorTarget } from "./targetResolver.ts";
 import { traceToRoot } from "./trace.ts";
-import type { GraphEdge, GraphNode, NodeId, YdkProject } from "./types.ts";
+import type { Assessment, GraphEdge, GraphNode, NodeId, YdkProject } from "./types.ts";
 
 export type ValidationResult = {
   ok: boolean;
@@ -13,6 +13,7 @@ const ALLOWED_EDGE_TYPES = new Set(["supports"]);
 const MIN_SCORE = 0;
 const MAX_SCORE = 4;
 const ASSESSED_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+const FINDING_LISTS = ["unfulfilled", "undeclared"] as const;
 
 function findDuplicateIds(nodes: GraphNode[]): NodeId[] {
   const seen = new Set<NodeId>();
@@ -40,6 +41,37 @@ function isValidAssessedDate(assessed: unknown): boolean {
   // A well-shaped date can still name no real day, which Date rolls over rather than rejects.
   const parsed = Date.parse(assessed);
   return !Number.isNaN(parsed) && new Date(parsed).toISOString().startsWith(assessed);
+}
+
+/**
+ * A finding written with an unquoted `: ` parses as a mapping rather than the
+ * sentence it looks like, which otherwise reaches the coverage view as an
+ * object, so every entry is held to being a string here.
+ */
+function findingListErrors(assessment: Assessment): string[] {
+  const errors: string[] = [];
+
+  for (const list of FINDING_LISTS) {
+    const findings: unknown = assessment[list];
+    if (findings === undefined || findings === null) {
+      continue;
+    }
+
+    if (!Array.isArray(findings)) {
+      errors.push(`Assessment ${assessment.node} has a non-list ${list} value: ${JSON.stringify(findings)}`);
+      continue;
+    }
+
+    for (const [index, finding] of findings.entries()) {
+      if (typeof finding !== "string") {
+        errors.push(
+          `Assessment ${assessment.node} has a non-string ${list} entry at index ${index}: ${JSON.stringify(finding)}`,
+        );
+      }
+    }
+  }
+
+  return errors;
 }
 
 function hasCycle(edges: GraphEdge[]): boolean {
@@ -154,6 +186,8 @@ export function validateProject(project: YdkProject): ValidationResult {
         `Assessment ${assessment.node} has invalid assessed date: ${JSON.stringify(assessment.assessed)}`,
       );
     }
+
+    errors.push(...findingListErrors(assessment));
 
     if (assessedNodes.has(assessment.node)) {
       errors.push(`Duplicate assessment for node: ${assessment.node}`);

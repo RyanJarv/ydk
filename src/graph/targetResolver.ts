@@ -170,6 +170,9 @@ const targetTypes: TargetTypeResolver[] = [
   },
 ];
 
+/** The target kinds a resolver implements, so validation can name them when an anchor uses another. */
+const SUPPORTED_TARGET_KINDS = targetTypes.map((type) => type.kind).sort();
+
 export function createTargetResolver(project: YdkProject): TargetResolver {
   return {
     resolve(target: string): TargetResolution | null {
@@ -211,9 +214,15 @@ function validateTargets(project: YdkProject): string[] {
 
   for (const anchor of project.anchors.anchors) {
     const resolver = targetTypes.find((candidate) => candidate.kind === anchor.target.kind);
-    if (resolver) {
-      errors.push(...resolver.validate(project, anchor));
+    if (!resolver) {
+      // Resolution silently skips an unknown kind, so validation is the only place a typo can surface.
+      errors.push(
+        `Anchor ${formatAnchorTarget(anchor)} uses unknown target kind: ${anchor.target.kind} (supported kinds: ${SUPPORTED_TARGET_KINDS.join(", ")})`,
+      );
+      continue;
     }
+
+    errors.push(...resolver.validate(project, anchor));
   }
 
   return errors;

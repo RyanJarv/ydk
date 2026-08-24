@@ -332,6 +332,39 @@ test("validates that concrete anchors reference existing files, directories, and
   assert.ok(!result.errors.some((error) => error.includes("generated")));
 });
 
+test("validates that an anchor names a target kind some resolver implements", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.anchors.anchors = [
+    {
+      target: {
+        kind: "fille",
+        value: "src/cli.ts",
+      },
+      node: "C-001",
+      reason: "Misspelled file kind.",
+    },
+    {
+      target: {
+        kind: "symbol",
+        value: {
+          path: "src/cli.ts",
+          symbol: "main",
+        },
+      },
+      node: "C-001",
+      reason: "Kind the model never implemented.",
+    },
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    'Anchor fille:"src/cli.ts" uses unknown target kind: fille (supported kinds: directory, file, filePattern, packageScript, url)',
+    'Anchor symbol:{"path":"src/cli.ts","symbol":"main"} uses unknown target kind: symbol (supported kinds: directory, file, filePattern, packageScript, url)',
+  ]);
+});
+
 test("loads assessments from .ydk/assessments.yaml", async () => {
   const root = await createConfiguredProject(
     [
@@ -459,6 +492,28 @@ test("rejects a second assessment of the same node", async () => {
 
   assert.equal(result.ok, false);
   assert.deepEqual(result.errors, ["Duplicate assessment for node: C-001"]);
+});
+
+test("validates that every finding is a string", async () => {
+  const project = await loadProject(await createConfiguredProject());
+  project.assessments.assessments = [
+    {
+      node: "C-001",
+      score: 2,
+      assessed: "2026-08-23",
+      // What YAML makes of a finding whose sentence carries an unquoted `: `.
+      unfulfilled: [{ "The explorer has no path query": "its search matches display text." }],
+      undeclared: "targetResolver also formats display strings.",
+    } as never,
+  ];
+
+  const result = validateProject(project);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    'Assessment C-001 has a non-string unfulfilled entry at index 0: {"The explorer has no path query":"its search matches display text."}',
+    'Assessment C-001 has a non-list undeclared value: "targetResolver also formats display strings."',
+  ]);
 });
 
 test("accepts a well-formed assessment of an anchorable node", async () => {

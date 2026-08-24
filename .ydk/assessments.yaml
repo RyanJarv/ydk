@@ -5,7 +5,7 @@ assessments:
     score: 2
     assessed: 2026-08-23
     unfulfilled:
-      - src/graph/targetResolver.ts silently skips any anchor whose kind has no resolver, so a typo such as `kind: fille` resolves nothing yet still passes validation and counts its node as anchored.
+      - 'src/graph/targetResolver.ts silently skips any anchor whose kind has no resolver, so a typo such as `kind: fille` resolves nothing yet still passes validation and counts its node as anchored.'
       - src/graph/types.ts still declares a `symbol` target kind that no resolver, validator, or coverage path implements, so symbol anchors cannot resolve an artifact to anything.
       - resolveTarget keeps only the single highest-specificity anchor and drops the rest, so an artifact that legitimately serves several purposes can be explained by only one of them.
       - loadProject reads .ydk/ from the process working directory alone, so artifacts in another checkout cannot be resolved without copying a configuration into it.
@@ -40,7 +40,7 @@ assessments:
     score: 2
     assessed: 2026-08-23
     unfulfilled:
-      - The /#/explorer surface has no artifact-path query: its search substring-matches anchor display text, so asking why src/serve/server.ts or docs/examples/direct-cli.md exists returns nothing, unlike `ydk why`.
+      - 'The /#/explorer surface has no artifact-path query: its search substring-matches anchor display text, so asking why src/serve/server.ts or docs/examples/direct-cli.md exists returns nothing, unlike `ydk why`.'
       - resolveWhy returns a single best anchor and never mentions the others, so an artifact with several legitimate reasons for existing is explained by only one of them.
     undeclared:
       - src/cli.ts and the `ydk` package script also implement validate, graph, coverage, and serve, so the behavior of four other nodes is anchored entirely to this feature.
@@ -73,5 +73,5 @@ assessments:
       - The map has no search or filter of its own, since the search box lives only in the explorer view, so on a graph larger than this one there is no way to find a node before navigating from it.
       - Map nodes are click-only divs with no keyboard focus, and src/render.ts draws a static terminal tree, so neither anchored artifact is navigable without a mouse.
     undeclared:
-      - Most of src/render.ts renders things other than the graph: why headers, trace trees, coverage meters, stale-anchor and unanchored-node lists, and assessed-node scores, which is output for F-001, F-003, and the unanchored F-005.
+      - 'Most of src/render.ts renders things other than the graph: why headers, trace trees, coverage meters, stale-anchor and unanchored-node lists, and assessed-node scores, which is output for F-001, F-003, and the unanchored F-005.'
       - renderGraphTree's depth limiting and hidden-node summaries, the --flat edge list, and --json output are terminal presentation modes that a navigable map does not describe.
